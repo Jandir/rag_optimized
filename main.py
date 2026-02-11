@@ -12,7 +12,6 @@ Terminology Rules:
 import os
 import sys
 import re
-import json
 import argparse
 import logging
 import time

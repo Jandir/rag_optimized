@@ -1,0 +1,12 @@
+# Regras de Terminologia para o RAG Processor
+# Formato: Termo Original -> Termo Novo
+# Linhas que começam com # são comentários e serão ignoradas.
+
+Sete Montanhas -> Sete Montes
+Ecclesia -> Ekklezia
+Eclesia -> Ekklezia
+Eklezia -> Ekklezia
+
+
+# Exemplo de Regex (prefixar com REGEX:)
+# REGEX: (?i)exemplo -> Substituição
