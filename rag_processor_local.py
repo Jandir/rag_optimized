@@ -236,18 +236,29 @@ class HeuristicProcessor:
             return [segmented_text_str]
 
     def _generate_markdown_output(self, meta_dict: Dict[str, str], entities_list: List[str], keywords_list: List[str], sections_list: List[str]) -> str:
-        """Formats the final RAG-ready markdown."""
+        """Formats the final RAG-ready markdown with YAML frontmatter."""
         now_obj: datetime = datetime.now()
         current_date_str: str = f"{now_obj.day} de {MONTHS_PT_DICT[str(now_obj.month)]} de {now_obj.year}"
 
-        output_str: str = f"# Fonte RAG: {meta_dict['title']}\n\n"
-        output_str += "## Metadados do Documento\n"
-        output_str += f"- **ID:** {meta_dict['video_id']}\n"
-        output_str += f"- **Data da Transcrição:** {current_date_str}\n"
-        output_str += f"- **Data do Evento:** {meta_dict['event_date']}\n"
-        output_str += f"- **Assunto Principal:** {', '.join(entities_list) if entities_list else 'Conteúdo Geral'}\n"
-        output_str += "- **Público-Alvo:** Líderes, Ekklezia, Mesa do Conselho.\n"
-        output_str += f"- **Terminologia Chave:** {', '.join(keywords_list)}\n\n"
+        output_str: str = "---\n"
+        output_str += f"id: \"{meta_dict['video_id']}\"\n"
+        output_str += f"title: \"{meta_dict['title']}\"\n"
+        output_str += f"transcription_date: \"{current_date_str}\"\n"
+        output_str += f"event_date: \"{meta_dict['event_date']}\"\n"
+
+        main_subjects = ', '.join([f'"{ent}"' for ent in entities_list]) if entities_list else '"Conteúdo Geral"'
+        output_str += f"main_subjects: [{main_subjects}]\n"
+        output_str += "target_audience: [\"Líderes\", \"Ekklezia\", \"Mesa do Conselho\"]\n"
+
+        kws = ', '.join([f'"{kw}"' for kw in keywords_list])
+        output_str += f"keywords: [{kws}]\n"
+        output_str += "---\n\n"
+
+        output_str += f"# {meta_dict['title']}\n\n"
+
+        if entities_list:
+            output_str += "## Escopo de Entidades (Contexto Automático)\n"
+            output_str += f"Este documento aborda principalmente: **{', '.join(entities_list)}**.\n\n"
         
         output_str += "## Seções Temáticas\n"
         for i_int, section_str in enumerate(sections_list, 1):

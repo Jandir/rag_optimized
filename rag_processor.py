@@ -209,30 +209,44 @@ def extract_metadata_from_filename(filename: str) -> Dict[str, str]:
 def get_rag_prompt(text: str, filename: str, title: str, current_date: str, event_date: str) -> str:
     """Returns the structured prompt for Gemini."""
     return f"""
-    Sua missão é adaptar esta transcrição de vídeo para ser uma fonte RAG (Retrieval-Augmented Generation) de alta qualidade.
+    Sua missão é adaptar esta transcrição de vídeo para ser uma fonte RAG (Retrieval-Augmented Generation) de alta qualidade, otimizada para ser lida e processada por agentes de IA (LLMs).
     
-    ESTRUTURA REQUERIDA (Markdown):
+    ESTRUTURA REQUERIDA:
     
-    1. # Fonte RAG: {title}
+    1. YAML Frontmatter (Para facilitar o parser de metadados):
+    ```yaml
+    id: [Crie um ID curto, ex: LIVE-00X]
+    title: "{title}"
+    transcription_date: "{current_date}"
+    event_date: "{event_date}"
+    main_subjects: [Lista de 2-3 temas centrais]
+    target_audience: ["Líderes", "Ekklezia", "Mesa do Conselho"]
+    keywords: [5-7 palavras-chave em formato de lista]
+    ```
     
-    2. ## Metadados do Documento
-    - **ID:** [Crie um ID curto, ex: LIVE-00X]
-    - **Data da Transcrição:** {current_date}
-    - **Data do Evento:** {event_date}
-    - **Assunto Principal:** [2-3 temas centrais]
-    - **Público-Alvo:** Líderes, Ekklezia, Mesa do Conselho.
-    - **Terminologia Chave:** [5-7 palavras-chave separadas por vírgula]
+    2. # {title}
     
-    3. ## Seções Temáticas
-    Divida o texto em seções lógicas usando:
+    3. ## Resumo Executivo
+    [Um parágrafo conciso e direto resumindo do que trata o conteúdo e quais as principais teses ou pontos defendidos, ideal para um LLM entender rapidamente o contexto geral]
+
+    4. ## Insights Principais (Key Takeaways)
+    - [Bullet point 1: Principal ensinamento/princípio com detalhes importantes]
+    - [Bullet point 2]
+    - [Bullet point 3]
+
+    5. ## Seções Temáticas
+    [Divida o texto em seções lógicas detalhadas baseadas nas mudanças de assunto]
+
+    Para cada seção, use a seguinte estrutura:
     ### [Título da Seção]
-    **Tags:** #[Tag1] #[Tag2]
-    [Conteúdo estruturado, limpo de vícios de linguagem, focado em princípios e estratégias]
+    **Contexto:** [Uma a duas frases resumindo a seção]
+
+    [O conteúdo da transcrição estruturado, limpo de vícios de linguagem, organizado com subtópicos, bullet points e negritos para destacar conceitos-chave. Use parágrafos bem definidos e focados em princípios e estratégias.]
     
     REGRAS CRÍTICAS:
-    - Mantenha o conteúdo profundo (não resuma demais).
-    - Remova redundâncias de fala (saudações repetitivas, ruídos).
-    - Use Markdown rigoroso.
+    - Mantenha o conteúdo profundo e sem perda de informações importantes (não resuma demais as seções temáticas).
+    - Remova redundâncias de fala (saudações repetitivas, ruídos, interrupções).
+    - Use formatação Markdown avançada e rigorosa (listas, negrito, itálico) para dar estrutura semântica.
     - Mantenha os termos "Sete Montes" e "Ekklezia" sempre que o conteúdo se referir a governo ou igreja.
     
     ARQUIVO ORIGINAL: {filename}
