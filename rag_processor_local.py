@@ -200,16 +200,20 @@ class HeuristicProcessor:
         self.nlp_obj = spacy.load("pt_core_news_sm")
         # Configuramos o extrator de palavras-chave YAKE
         self.kw_extractor_obj = yake.KeywordExtractor(lan="pt", n=3, dedupLim=0.9, top=10)
+        # Extrator de palavras-chave para seções
+        self.sec_kw_extractor_obj = yake.KeywordExtractor(lan="pt", n=2, top=3)
         # O TextTiling ajuda a dividir o texto em seções baseadas em mudança de tópico
         self.tt_tokenizer_obj = TextTilingTokenizer()
 
-    def clean_filler_words(self, text_str: str) -> str:
-        """Removes common Portuguese filler words via regex."""
+        # Compila a regex de filler words uma vez na inicialização
         fillers_list: List[str] = [
             r'\bne\b', r'\bentão\b', r'\btipo\b', r'\bsabe\b', r'\bpra\b', r'\btá\b', r'\bgente\b'
         ]
-        pattern_obj: re.Pattern = re.compile('|'.join(fillers_list), re.IGNORECASE)
-        return pattern_obj.sub('', text_str).replace('  ', ' ').strip()
+        self.fillers_pattern_obj: re.Pattern = re.compile('|'.join(fillers_list), re.IGNORECASE)
+
+    def clean_filler_words(self, text_str: str) -> str:
+        """Removes common Portuguese filler words via regex."""
+        return self.fillers_pattern_obj.sub('', text_str).replace('  ', ' ').strip()
 
     def _extract_keywords(self, text_str: str) -> List[str]:
         """Extracts top keywords using YAKE."""
@@ -251,8 +255,7 @@ class HeuristicProcessor:
         
         output_str += "## Seções Temáticas\n"
         for i_int, section_str in enumerate(sections_list, 1):
-            sec_kw_extractor = yake.KeywordExtractor(lan="pt", n=2, top=3)
-            sec_keywords_list: List[str] = [kw[0] for kw in sec_kw_extractor.extract_keywords(section_str)]
+            sec_keywords_list: List[str] = [kw[0] for kw in self.sec_kw_extractor_obj.extract_keywords(section_str)]
             sec_title_str: str = f"Seção {i_int}: " + (sec_keywords_list[0].capitalize() if sec_keywords_list else "Desenvolvimento")
             
             output_str += f"### {sec_title_str}\n"
