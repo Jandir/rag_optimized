@@ -23,6 +23,11 @@ from dotenv import load_dotenv
 
 # --- Helper Functions ---
 
+# ⚡ BOLT OPTIMIZATION: Pre-compile regexes at module level to avoid repeated compilation in loops
+SRT_BLOCK_PATTERN = re.compile(r'(\d+)\n(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})\n((?:(?!\n\n).)*?)(?=\n\n|$)', re.DOTALL)
+HTML_TAG_PATTERN = re.compile(r'<[^>]*>')
+DATE_EXTRACT_PATTERN = re.compile(r'(Jan|Fev|Mar|Abr|Mai|Jun|Jul|Ago|Set|Out|Nov|Dez)\s+(\d{4})', re.I)
+
 def clean_srt_content(content: str) -> str:
     """
     Remove timestamps and deduplicate lines common in "rollup" subtitles (Youtube).
@@ -37,14 +42,12 @@ def clean_srt_content(content: str) -> str:
     # Text... (can be multiple lines)
     # \n (separator blank line)
     
-    pattern = re.compile(r'(\d+)\n(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})\n((?:(?!\n\n).)*?)(?=\n\n|$)', re.DOTALL)
-    
     blocks = []
-    for match in pattern.finditer(content):
+    for match in SRT_BLOCK_PATTERN.finditer(content):
         text_block = match.group(4).strip()
         
         # Clean HTML tags
-        text_block = re.sub(r'<[^>]*>', '', text_block)
+        text_block = HTML_TAG_PATTERN.sub('', text_block)
         
         if text_block:
             blocks.append(text_block)
@@ -179,7 +182,7 @@ def extract_metadata_from_filename(filename: str) -> Dict[str, str]:
     clean_name = clean_name.strip()
     
     # Try to find date patterns like "Jan 2026"
-    date_match = re.search(r'(Jan|Fev|Mar|Abr|Mai|Jun|Jul|Ago|Set|Out|Nov|Dez)\s+(\d{4})', clean_name, re.I)
+    date_match = DATE_EXTRACT_PATTERN.search(clean_name)
     
     months_map = {
         "Jan": "Janeiro", "Fev": "Fevereiro", "Mar": "Março", "Abr": "Abril",
