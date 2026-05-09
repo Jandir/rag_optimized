@@ -51,16 +51,19 @@ load_dotenv(os.path.join(SCRIPT_DIR_PATH, '.env'))
 
 # --- Helper Functions ---
 
+# ⚡ BOLT OPTIMIZATION: Pre-compile regexes at module level to avoid repeated compilation in loops
+SRT_BLOCK_PATTERN = re.compile(r'(\d+)\n(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})\n((?:(?!\n\n).)*?)(?=\n\n|$)', re.DOTALL)
+HTML_TAG_PATTERN = re.compile(r'<[^>]*>')
+DATE_EXTRACT_PATTERN = re.compile(r'(Jan|Fev|Mar|Abr|Mai|Jun|Jul|Ago|Set|Out|Nov|Dez)\s+(\d{4})', re.I)
+VIDEO_ID_PATTERN = re.compile(r'(?:\[|[-_])([a-zA-Z0-9_-]{11})(?:\])?$')
+FILLER_WORDS_PATTERN = re.compile(r'\bne\b|\bentão\b|\btipo\b|\bsabe\b|\bpra\b|\btá\b|\bgente\b', re.IGNORECASE)
+
 def _parse_srt_blocks(content_str: str) -> List[str]:
     """Extracts text blocks from SRT content, removing tags."""
-    pattern_obj: re.Pattern = re.compile(
-        r'(\d+)\n(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})\n((?:(?!\n\n).)*?)(?=\n\n|$)',
-        re.DOTALL
-    )
     blocks_list: List[str] = []
-    for match_obj in pattern_obj.finditer(content_str):
+    for match_obj in SRT_BLOCK_PATTERN.finditer(content_str):
         text_block_str: str = match_obj.group(4).strip()
-        text_block_str = re.sub(r'<[^>]*>', '', text_block_str)
+        text_block_str = HTML_TAG_PATTERN.sub('', text_block_str)
         if text_block_str:
             blocks_list.append(text_block_str)
     return blocks_list
@@ -160,11 +163,7 @@ def extract_metadata_from_filename(filename_str: str) -> Dict[str, str]:
         .replace(".srt", "")
         .strip()
     )
-    date_match_obj: Optional[re.Match] = re.search(
-        r'(Jan|Fev|Mar|Abr|Mai|Jun|Jul|Ago|Set|Out|Nov|Dez)\s+(\d{4})',
-        clean_name_str,
-        re.I
-    )
+    date_match_obj: Optional[re.Match] = DATE_EXTRACT_PATTERN.search(clean_name_str)
     
     title_str: str = clean_name_str
     event_date_str: str = "N/A"
@@ -177,7 +176,7 @@ def extract_metadata_from_filename(filename_str: str) -> Dict[str, str]:
         if "MasterMind" in clean_name_str:
             title_str = f"MasterMind {full_month_str} {year_str}"
             
-    video_id_match_obj: Optional[re.Match] = re.search(r'(?:\[|[-_])([a-zA-Z0-9_-]{11})(?:\])?$', clean_name_str)
+    video_id_match_obj: Optional[re.Match] = VIDEO_ID_PATTERN.search(clean_name_str)
     video_id_str: str = video_id_match_obj.group(1) if video_id_match_obj else "N/A"
     
     return {
@@ -200,16 +199,14 @@ class HeuristicProcessor:
         self.nlp_obj = spacy.load("pt_core_news_sm")
         # Configuramos o extrator de palavras-chave YAKE
         self.kw_extractor_obj = yake.KeywordExtractor(lan="pt", n=3, dedupLim=0.9, top=10)
+        # ⚡ BOLT OPTIMIZATION: Initialize section keyword extractor once to prevent repetitive slow instantiations in loops
+        self.sec_kw_extractor_obj = yake.KeywordExtractor(lan="pt", n=2, top=3)
         # O TextTiling ajuda a dividir o texto em seções baseadas em mudança de tópico
         self.tt_tokenizer_obj = TextTilingTokenizer()
 
     def clean_filler_words(self, text_str: str) -> str:
         """Removes common Portuguese filler words via regex."""
-        fillers_list: List[str] = [
-            r'\bne\b', r'\bentão\b', r'\btipo\b', r'\bsabe\b', r'\bpra\b', r'\btá\b', r'\bgente\b'
-        ]
-        pattern_obj: re.Pattern = re.compile('|'.join(fillers_list), re.IGNORECASE)
-        return pattern_obj.sub('', text_str).replace('  ', ' ').strip()
+        return FILLER_WORDS_PATTERN.sub('', text_str).replace('  ', ' ').strip()
 
     def _extract_keywords(self, text_str: str) -> List[str]:
         """Extracts top keywords using YAKE."""
@@ -251,8 +248,8 @@ class HeuristicProcessor:
         
         output_str += "## Seções Temáticas\n"
         for i_int, section_str in enumerate(sections_list, 1):
-            sec_kw_extractor = yake.KeywordExtractor(lan="pt", n=2, top=3)
-            sec_keywords_list: List[str] = [kw[0] for kw in sec_kw_extractor.extract_keywords(section_str)]
+            # ⚡ BOLT OPTIMIZATION: Reuse self.sec_kw_extractor_obj instead of re-instantiating YAKE per section
+            sec_keywords_list: List[str] = [kw[0] for kw in self.sec_kw_extractor_obj.extract_keywords(section_str)]
             sec_title_str: str = f"Seção {i_int}: " + (sec_keywords_list[0].capitalize() if sec_keywords_list else "Desenvolvimento")
             
             output_str += f"### {sec_title_str}\n"
