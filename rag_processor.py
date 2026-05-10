@@ -150,10 +150,20 @@ def load_rules(rules_path: str = "rules.txt") -> List[Dict[str, Any]]:
                     parts = line.split('->', 1)
                     original = parts[0].strip()
                     replacement = parts[1].strip()
+
+                    pattern = None
+                    if is_regex:
+                        try:
+                            pattern = re.compile(original)
+                        except Exception as e:
+                            logger.error(f"Erro ao compilar regex '{original}': {e}")
+                            continue
+
                     rules.append({
                         "original": original,
                         "replacement": replacement,
-                        "is_regex": is_regex
+                        "is_regex": is_regex,
+                        "pattern": pattern
                     })
         return rules
     except Exception as e:
@@ -167,7 +177,7 @@ def enforce_terminology(text: str, rules: List[Dict[str, Any]]) -> str:
         replacement = rule["replacement"]
         if rule["is_regex"]:
             try:
-                text = re.sub(original, replacement, text)
+                text = rule["pattern"].sub(replacement, text)
             except Exception as e:
                 logger.error(f"Erro na regex '{original}': {e}")
         else:

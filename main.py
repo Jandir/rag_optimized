@@ -21,6 +21,8 @@ from typing import Dict, List, Optional, Any
 from google import genai
 from dotenv import load_dotenv
 
+DATE_EXTRACT_PATTERN = re.compile(r'(Jan|Fev|Mar|Abr|Mai|Jun|Jul|Ago|Set|Out|Nov|Dez)\s+(\d{4})', re.I)
+
 # --- Configuration & Logging ---
 logging.basicConfig(
     level=logging.INFO,
@@ -66,10 +68,20 @@ def load_rules(rules_path: str = "rules.txt") -> List[Dict[str, Any]]:
                     parts = line.split('->', 1)
                     original = parts[0].strip()
                     replacement = parts[1].strip()
+
+                    pattern = None
+                    if is_regex:
+                        try:
+                            pattern = re.compile(original)
+                        except Exception as e:
+                            logger.error(f"Erro ao compilar regex '{original}': {e}")
+                            continue
+
                     rules.append({
                         "original": original,
                         "replacement": replacement,
-                        "is_regex": is_regex
+                        "is_regex": is_regex,
+                        "pattern": pattern
                     })
         return rules
     except Exception as e:
@@ -83,7 +95,7 @@ def enforce_terminology(text: str, rules: List[Dict[str, Any]]) -> str:
         replacement = rule["replacement"]
         if rule["is_regex"]:
             try:
-                text = re.sub(original, replacement, text)
+                text = rule["pattern"].sub(replacement, text)
             except Exception as e:
                 logger.error(f"Erro na regex '{original}': {e}")
         else:
@@ -96,7 +108,7 @@ def extract_metadata_from_filename(filename: str) -> Dict[str, str]:
     clean_name = filename.replace(" Transcrição.txt", "").replace(".txt", "").strip()
     
     # Try to find date patterns like "Jan 2026"
-    date_match = re.search(r'(Jan|Fev|Mar|Abr|Mai|Jun|Jul|Ago|Set|Out|Nov|Dez)\s+(\d{4})', clean_name, re.I)
+    date_match = DATE_EXTRACT_PATTERN.search(clean_name)
     
     months_map = {
         "Jan": "Janeiro", "Fev": "Fevereiro", "Mar": "Março", "Abr": "Abril",
