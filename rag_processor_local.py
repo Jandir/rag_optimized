@@ -131,11 +131,20 @@ def load_rules(rules_path_str: str = "rules.txt") -> List[Dict[str, Any]]:
                     line_str = line_str[6:].strip()
                 if '->' in line_str:
                     parts_list: List[str] = line_str.split('->', 1)
-                    rules_list.append({
-                        "original": parts_list[0].strip(),
+                    original = parts_list[0].strip()
+                    rule = {
+                        "original": original,
                         "replacement": parts_list[1].strip(),
                         "is_regex": is_regex_bool
-                    })
+                    }
+                    if is_regex_bool:
+                        try:
+                            # ⚡ BOLT OPTIMIZATION: Pre-compile regex during load to prevent recompilation in loops
+                            rule["pattern"] = re.compile(original)
+                        except Exception as e:
+                            logger.error(f"Erro ao compilar regex '{original}': {e}")
+                            continue
+                    rules_list.append(rule)
         return rules_list
     except Exception as error_obj:
         logger.error(f"Error loading rules: {error_obj}")
@@ -149,7 +158,11 @@ def enforce_terminology(text_str: str, rules_list: List[Dict[str, Any]]) -> str:
     """
     for rule_dict in rules_list:
         if rule_dict["is_regex"]:
-            text_str = re.sub(rule_dict["original"], rule_dict["replacement"], text_str)
+            if "pattern" in rule_dict:
+                try:
+                    text_str = rule_dict["pattern"].sub(rule_dict["replacement"], text_str)
+                except Exception as e:
+                    logger.error(f"Erro na substituição da regex '{rule_dict['original']}': {e}")
         else:
             text_str = text_str.replace(rule_dict["original"], rule_dict["replacement"])
     return text_str
