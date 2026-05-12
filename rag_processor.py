@@ -150,11 +150,18 @@ def load_rules(rules_path: str = "rules.txt") -> List[Dict[str, Any]]:
                     parts = line.split('->', 1)
                     original = parts[0].strip()
                     replacement = parts[1].strip()
-                    rules.append({
+                    rule_dict = {
                         "original": original,
                         "replacement": replacement,
                         "is_regex": is_regex
-                    })
+                    }
+                    if is_regex:
+                        try:
+                            rule_dict["pattern"] = re.compile(original)
+                        except Exception as e:
+                            logger.error(f"Invalid regex rule '{original}': {e}")
+                            continue
+                    rules.append(rule_dict)
         return rules
     except Exception as e:
         logger.error(f"Erro ao carregar {rules_path}: {e}")
@@ -167,7 +174,8 @@ def enforce_terminology(text: str, rules: List[Dict[str, Any]]) -> str:
         replacement = rule["replacement"]
         if rule["is_regex"]:
             try:
-                text = re.sub(original, replacement, text)
+                # ⚡ BOLT OPTIMIZATION: Use pre-compiled regex pattern to avoid repeated compilation overhead in loop
+                text = rule["pattern"].sub(replacement, text)
             except Exception as e:
                 logger.error(f"Erro na regex '{original}': {e}")
         else:
