@@ -1,3 +1,7 @@
 ## 2026-05-09 - [Precompiling Regex & Avoiding Instantiation inside Loops]
 **Learning:** `yake.KeywordExtractor` objects have a significantly slow initialization step. Instantiating it per section or inside loops creates a notable performance bottleneck. Repeatedly calling `re.compile()` inside functions (like `clean_srt_content` and `extract_metadata_from_filename`) also adds overhead.
 **Action:** When working with Python text-processing code, look for module-level `re.compile()` opportunities and always hoist NLP objects like `yake.KeywordExtractor` or `spacy.load` models into class initializations (`__init__`) instead of function loops to maintain performance.
+
+## 2024-05-24 - Pre-compiling dynamic regexes in config loading
+**Learning:** Compiling dynamic regex expressions using `re.sub(pattern, ...)` inside a loop iterating over large text bodies is a major performance anti-pattern. While static regexes were pre-compiled correctly at module level, user-provided regexes loaded from `rules.txt` were compiled on the fly for every single rule across every file processed in `enforce_terminology`. This caused `O(R*F)` re-compilations where R is the number of rules and F the number of files.
+**Action:** Always pre-compile user-defined regex strings into `re.Pattern` objects during initialization/loading (e.g., `load_rules`), saving the compiled object in the rule dictionary. This changes regex compilation to `O(R)` only once, drastically improving execution loops.
