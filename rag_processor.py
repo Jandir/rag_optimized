@@ -150,11 +150,21 @@ def load_rules(rules_path: str = "rules.txt") -> List[Dict[str, Any]]:
                     parts = line.split('->', 1)
                     original = parts[0].strip()
                     replacement = parts[1].strip()
-                    rules.append({
+
+                    rule_dict = {
                         "original": original,
                         "replacement": replacement,
                         "is_regex": is_regex
-                    })
+                    }
+
+                    if is_regex:
+                        try:
+                            rule_dict["compiled_regex"] = re.compile(original)
+                        except Exception as e:
+                            logger.error(f"Erro ao compilar regex '{original}': {e}")
+                            continue
+
+                    rules.append(rule_dict)
         return rules
     except Exception as e:
         logger.error(f"Erro ao carregar {rules_path}: {e}")
@@ -163,15 +173,14 @@ def load_rules(rules_path: str = "rules.txt") -> List[Dict[str, Any]]:
 def enforce_terminology(text: str, rules: List[Dict[str, Any]]) -> str:
     """Enforces nomenclature rules loaded from configuration."""
     for rule in rules:
-        original = rule["original"]
-        replacement = rule["replacement"]
         if rule["is_regex"]:
             try:
-                text = re.sub(original, replacement, text)
+                # ⚡ BOLT OPTIMIZATION: Use pre-compiled regex for terminology replacement
+                text = rule["compiled_regex"].sub(rule["replacement"], text)
             except Exception as e:
-                logger.error(f"Erro na regex '{original}': {e}")
+                logger.error(f"Erro na regex pre-compilada '{rule['original']}': {e}")
         else:
-            text = text.replace(original, replacement)
+            text = text.replace(rule["original"], rule["replacement"])
             
     return text
 
