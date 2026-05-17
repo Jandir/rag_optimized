@@ -131,10 +131,22 @@ def load_rules(rules_path_str: str = "rules.txt") -> List[Dict[str, Any]]:
                     line_str = line_str[6:].strip()
                 if '->' in line_str:
                     parts_list: List[str] = line_str.split('->', 1)
+                    original_str = parts_list[0].strip()
+                    replacement_str = parts_list[1].strip()
+
+                    compiled_pattern = None
+                    if is_regex_bool:
+                        try:
+                            compiled_pattern = re.compile(original_str)
+                        except re.error as e:
+                            logger.error(f"Erro ao compilar regex '{original_str}': {e}")
+                            continue
+
                     rules_list.append({
-                        "original": parts_list[0].strip(),
-                        "replacement": parts_list[1].strip(),
-                        "is_regex": is_regex_bool
+                        "original": original_str,
+                        "replacement": replacement_str,
+                        "is_regex": is_regex_bool,
+                        "compiled_pattern": compiled_pattern
                     })
         return rules_list
     except Exception as error_obj:
@@ -148,9 +160,12 @@ def enforce_terminology(text_str: str, rules_list: List[Dict[str, Any]]) -> str:
     Isso é vital para manter a consistência de termos como 'Ekklezia' ou 'Sete Montes'.
     """
     for rule_dict in rules_list:
-        if rule_dict["is_regex"]:
-            text_str = re.sub(rule_dict["original"], rule_dict["replacement"], text_str)
-        else:
+        if rule_dict["is_regex"] and rule_dict["compiled_pattern"]:
+            try:
+                text_str = rule_dict["compiled_pattern"].sub(rule_dict["replacement"], text_str)
+            except Exception as e:
+                logger.error(f"Erro ao aplicar regex '{rule_dict['original']}': {e}")
+        elif not rule_dict["is_regex"]:
             text_str = text_str.replace(rule_dict["original"], rule_dict["replacement"])
     return text_str
 
