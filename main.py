@@ -40,6 +40,13 @@ if not GEMINI_API_KEY:
     logger.error("GEMINI_API_KEY not found in environment variables.")
     sys.exit(1)
 
+# --- Helpers ---
+# ⚡ BOLT OPTIMIZATION: Move dictionary instantiation to module level to avoid recreation on each function call
+MONTHS_PT = {
+    1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
+    7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
+}
+
 # --- Rules Loading ---
 
 def load_rules(rules_path: str = "rules.txt") -> List[Dict[str, Any]]:
@@ -207,12 +214,8 @@ def process_file(client: genai.Client, file_path: str, output_dir: str, rules: D
         current_date = datetime.now().strftime("%d de %B de %Y")
         # Handle locale-specific month if possible, but for simplicity we can use a map or stick to system
         # Actually, let's just use manual month mapping for current_date to be safe with user's PT-BR preference
-        months_pt = {
-            1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
-            7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
-        }
         now = datetime.now()
-        current_date_str = f"{now.day} de {months_pt[now.month]} de {now.year}"
+        current_date_str = f"{now.day} de {MONTHS_PT[now.month]} de {now.year}"
 
         # 1. Gemini Processing
         optimized_text = process_with_gemini(

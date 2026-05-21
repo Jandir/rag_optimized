@@ -28,6 +28,12 @@ SRT_BLOCK_PATTERN = re.compile(r'(\d+)\n(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{
 HTML_TAG_PATTERN = re.compile(r'<[^>]*>')
 DATE_EXTRACT_PATTERN = re.compile(r'(Jan|Fev|Mar|Abr|Mai|Jun|Jul|Ago|Set|Out|Nov|Dez)\s+(\d{4})', re.I)
 
+# ⚡ BOLT OPTIMIZATION: Move dictionary instantiation to module level to avoid recreation on each function call
+MONTHS_PT = {
+    1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
+    7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
+}
+
 def clean_srt_content(content: str) -> str:
     """
     Remove timestamps and deduplicate lines common in "rollup" subtitles (Youtube).
@@ -297,12 +303,8 @@ def process_file(client: genai.Client, file_path: str, output_dir: str, rules: D
         current_date = datetime.now().strftime("%d de %B de %Y")
         # Handle locale-specific month if possible, but for simplicity we can use a map or stick to system
         # Actually, let's just use manual month mapping for current_date to be safe with user's PT-BR preference
-        months_pt = {
-            1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
-            7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
-        }
         now = datetime.now()
-        current_date_str = f"{now.day} de {months_pt[now.month]} de {now.year}"
+        current_date_str = f"{now.day} de {MONTHS_PT[now.month]} de {now.year}"
 
         # 1. Gemini Processing
         optimized_text = process_with_gemini(
