@@ -40,14 +40,19 @@ if not GEMINI_API_KEY:
     logger.error("GEMINI_API_KEY not found in environment variables.")
     sys.exit(1)
 
-# ⚡ BOLT OPTIMIZATION: Extract static regex and dictionary to module level to avoid re-instantiation in loops
+# --- Helper Functions ---
+
+# ⚡ BOLT OPTIMIZATION: Pre-compile regexes at module level to avoid repeated compilation in loops
 DATE_EXTRACT_PATTERN = re.compile(r'(Jan|Fev|Mar|Abr|Mai|Jun|Jul|Ago|Set|Out|Nov|Dez)\s+(\d{4})', re.I)
-MONTHS_PT = {
+
+# ⚡ BOLT OPTIMIZATION: Define module-level dictionary to avoid instantiation inside functions
+MONTHS_PT: Dict[str, str] = {
     "Jan": "Janeiro", "Fev": "Fevereiro", "Mar": "Março", "Abr": "Abril",
     "Mai": "Maio", "Jun": "Junho", "Jul": "Julho", "Ago": "Agosto",
     "Set": "Setembro", "Out": "Outubro", "Nov": "Novembro", "Dez": "Dezembro",
-    1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
-    7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
+    "1": "Janeiro", "2": "Fevereiro", "3": "Março", "4": "Abril",
+    "5": "Maio", "6": "Junho", "7": "Julho", "8": "Agosto",
+    "9": "Setembro", "10": "Outubro", "11": "Novembro", "12": "Dezembro"
 }
 
 # --- Rules Loading ---
@@ -76,11 +81,18 @@ def load_rules(rules_path: str = "rules.txt") -> List[Dict[str, Any]]:
                     parts = line.split('->', 1)
                     original = parts[0].strip()
                     replacement = parts[1].strip()
-                    rules.append({
+                    rule = {
                         "original": original,
                         "replacement": replacement,
                         "is_regex": is_regex
-                    })
+                    }
+                    if is_regex:
+                        try:
+                            rule["pattern"] = re.compile(original)
+                        except Exception as e:
+                            logger.error(f"Erro ao compilar regex '{original}': {e}")
+                            continue
+                    rules.append(rule)
         return rules
     except Exception as e:
         logger.error(f"Erro ao carregar {rules_path}: {e}")
@@ -89,15 +101,13 @@ def load_rules(rules_path: str = "rules.txt") -> List[Dict[str, Any]]:
 def enforce_terminology(text: str, rules: List[Dict[str, Any]]) -> str:
     """Enforces nomenclature rules loaded from configuration."""
     for rule in rules:
-        original = rule["original"]
-        replacement = rule["replacement"]
         if rule["is_regex"]:
             try:
-                text = re.sub(original, replacement, text)
+                text = rule["pattern"].sub(rule["replacement"], text)
             except Exception as e:
-                logger.error(f"Erro na regex '{original}': {e}")
+                logger.error(f"Erro na substituição da regex '{rule['original']}': {e}")
         else:
-            text = text.replace(original, replacement)
+            text = text.replace(rule["original"], rule["replacement"])
             
     return text
 
@@ -116,6 +126,7 @@ def extract_metadata_from_filename(filename: str) -> Dict[str, str]:
         year = date_match.group(2)
         # Use first 3 letters for mapping
         key = month_abbr[:3]
+        if key == "Mai": key = "Mai" # Ensure Maio/Mai works
         full_month = MONTHS_PT.get(key, month_abbr)
         event_date = f"{full_month} de {year}"
         
@@ -208,7 +219,7 @@ def process_file(client: genai.Client, file_path: str, output_dir: str, rules: D
         # 0. Prep Metadata
         meta = extract_metadata_from_filename(filename)
         now = datetime.now()
-        current_date_str = f"{now.day} de {MONTHS_PT[now.month]} de {now.year}"
+        current_date_str = f"{now.day} de {MONTHS_PT[str(now.month)]} de {now.year}"
 
         # 1. Gemini Processing
         optimized_text = process_with_gemini(

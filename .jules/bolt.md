@@ -5,6 +5,7 @@
 ## 2024-05-18 - [Optimization] Pre-compiling dynamic Regex rules
 **Learning:** Compiling dynamic regular expressions on the fly (inside a loop) causes severe performance bottlenecks, especially when applying multiple rules across large documents (like video transcripts).
 **Action:** When working with dynamic regex rules loaded from configuration files, always pre-compile them during initialization (`re.compile`) and store the compiled patterns in memory. Furthermore, when executing `pattern.sub()`, wrap it in a `try...except` block to prevent failures from user-defined malformed replacement strings (such as invalid group references) at runtime.
-## 2024-05-24 - [Avoid re-instantiating static dictionaries and regex in Python loops]
-**Learning:** Initializing static dictionaries (like `months_pt` and `months_map`) or compiling regexes (like `DATE_EXTRACT_PATTERN`) inside frequently called functions (e.g., `process_file` within a thread pool execution) creates unnecessary overhead during parallel bulk processing of transcripts.
-**Action:** Always extract static mapping dictionaries and regex patterns to module-level constants. By doing so, they are initialized and compiled exactly once at load time, reducing memory allocation and improving execution speed.
+
+## 2025-02-27 - [Avoiding Dictionary Re-instantiation in Loops]
+**Learning:** Defining static dictionaries (like months mappings) locally inside functions that are called repeatedly (e.g. `extract_metadata_from_filename` or during a file processing loop) incurs significant overhead due to constant re-instantiation in memory.
+**Action:** Always define static mapping dictionaries at the module/global level to ensure they are created once, saving memory allocations and processing time, especially during bulk operations.
