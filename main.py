@@ -17,7 +17,7 @@ import logging
 import time
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Any
 from google import genai
 from dotenv import load_dotenv
 
@@ -39,6 +39,21 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
     logger.error("GEMINI_API_KEY not found in environment variables.")
     sys.exit(1)
+
+# --- Helper Functions ---
+
+# ⚡ BOLT OPTIMIZATION: Pre-compile regexes at module level to avoid repeated compilation in loops
+DATE_EXTRACT_PATTERN = re.compile(r'(Jan|Fev|Mar|Abr|Mai|Jun|Jul|Ago|Set|Out|Nov|Dez)\s+(\d{4})', re.I)
+
+# ⚡ BOLT OPTIMIZATION: Define module-level dictionary to avoid instantiation inside functions
+MONTHS_PT: Dict[str, str] = {
+    "Jan": "Janeiro", "Fev": "Fevereiro", "Mar": "Março", "Abr": "Abril",
+    "Mai": "Maio", "Jun": "Junho", "Jul": "Julho", "Ago": "Agosto",
+    "Set": "Setembro", "Out": "Outubro", "Nov": "Novembro", "Dez": "Dezembro",
+    "1": "Janeiro", "2": "Fevereiro", "3": "Março", "4": "Abril",
+    "5": "Maio", "6": "Junho", "7": "Julho", "8": "Agosto",
+    "9": "Setembro", "10": "Outubro", "11": "Novembro", "12": "Dezembro"
+}
 
 # --- Rules Loading ---
 
@@ -86,8 +101,6 @@ def load_rules(rules_path: str = "rules.txt") -> List[Dict[str, Any]]:
 def enforce_terminology(text: str, rules: List[Dict[str, Any]]) -> str:
     """Enforces nomenclature rules loaded from configuration."""
     for rule in rules:
-        original = rule["original"]
-        replacement = rule["replacement"]
         if rule["is_regex"]:
             if "pattern" in rule:
                 try:
@@ -95,7 +108,7 @@ def enforce_terminology(text: str, rules: List[Dict[str, Any]]) -> str:
                 except Exception as e:
                     logger.error(f"Erro ao aplicar regex '{original}': {e}")
         else:
-            text = text.replace(original, replacement)
+            text = text.replace(rule["original"], rule["replacement"])
             
     return text
 
@@ -104,13 +117,7 @@ def extract_metadata_from_filename(filename: str) -> Dict[str, str]:
     clean_name = filename.replace(" Transcrição.txt", "").replace(".txt", "").strip()
     
     # Try to find date patterns like "Jan 2026"
-    date_match = re.search(r'(Jan|Fev|Mar|Abr|Mai|Jun|Jul|Ago|Set|Out|Nov|Dez)\s+(\d{4})', clean_name, re.I)
-    
-    months_map = {
-        "Jan": "Janeiro", "Fev": "Fevereiro", "Mar": "Março", "Abr": "Abril",
-        "Mai": "Maio", "Jun": "Junho", "Jul": "Julho", "Ago": "Agosto",
-        "Set": "Setembro", "Out": "Outubro", "Nov": "Novembro", "Dez": "Dezembro"
-    }
+    date_match = DATE_EXTRACT_PATTERN.search(clean_name)
     
     title = clean_name
     event_date = "N/A"
@@ -121,7 +128,7 @@ def extract_metadata_from_filename(filename: str) -> Dict[str, str]:
         # Use first 3 letters for mapping
         key = month_abbr[:3]
         if key == "Mai": key = "Mai" # Ensure Maio/Mai works
-        full_month = months_map.get(key, month_abbr)
+        full_month = MONTHS_PT.get(key, month_abbr)
         event_date = f"{full_month} de {year}"
         
         if "MasterMind" in clean_name:
@@ -212,15 +219,8 @@ def process_file(client: genai.Client, file_path: str, output_dir: str, rules: D
 
         # 0. Prep Metadata
         meta = extract_metadata_from_filename(filename)
-        current_date = datetime.now().strftime("%d de %B de %Y")
-        # Handle locale-specific month if possible, but for simplicity we can use a map or stick to system
-        # Actually, let's just use manual month mapping for current_date to be safe with user's PT-BR preference
-        months_pt = {
-            1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
-            7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
-        }
         now = datetime.now()
-        current_date_str = f"{now.day} de {months_pt[now.month]} de {now.year}"
+        current_date_str = f"{now.day} de {MONTHS_PT[str(now.month)]} de {now.year}"
 
         # 1. Gemini Processing
         optimized_text = process_with_gemini(
