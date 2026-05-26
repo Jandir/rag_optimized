@@ -51,16 +51,19 @@ load_dotenv(os.path.join(SCRIPT_DIR_PATH, '.env'))
 
 # --- Helper Functions ---
 
+# ⚡ BOLT OPTIMIZATION: Pre-compile regexes at module level to avoid repeated compilation in loops
+SRT_BLOCK_PATTERN = re.compile(r'(\d+)\n(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})\n((?:(?!\n\n).)*?)(?=\n\n|$)', re.DOTALL)
+HTML_TAG_PATTERN = re.compile(r'<[^>]*>')
+DATE_EXTRACT_PATTERN = re.compile(r'(Jan|Fev|Mar|Abr|Mai|Jun|Jul|Ago|Set|Out|Nov|Dez)\s+(\d{4})', re.I)
+VIDEO_ID_PATTERN = re.compile(r'(?:\[|[-_])([a-zA-Z0-9_-]{11})(?:\])?$')
+FILLER_WORDS_PATTERN = re.compile(r'\bne\b|\bentão\b|\btipo\b|\bsabe\b|\bpra\b|\btá\b|\bgente\b', re.IGNORECASE)
+
 def _parse_srt_blocks(content_str: str) -> List[str]:
     """Extracts text blocks from SRT content, removing tags."""
-    pattern_obj: re.Pattern = re.compile(
-        r'(\d+)\n(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})\n((?:(?!\n\n).)*?)(?=\n\n|$)',
-        re.DOTALL
-    )
     blocks_list: List[str] = []
-    for match_obj in pattern_obj.finditer(content_str):
+    for match_obj in SRT_BLOCK_PATTERN.finditer(content_str):
         text_block_str: str = match_obj.group(4).strip()
-        text_block_str = re.sub(r'<[^>]*>', '', text_block_str)
+        text_block_str = HTML_TAG_PATTERN.sub('', text_block_str)
         if text_block_str:
             blocks_list.append(text_block_str)
     return blocks_list
@@ -128,11 +131,20 @@ def load_rules(rules_path_str: str = "rules.txt") -> List[Dict[str, Any]]:
                     line_str = line_str[6:].strip()
                 if '->' in line_str:
                     parts_list: List[str] = line_str.split('->', 1)
-                    rules_list.append({
-                        "original": parts_list[0].strip(),
-                        "replacement": parts_list[1].strip(),
+                    original_str: str = parts_list[0].strip()
+                    replacement_str: str = parts_list[1].strip()
+                    rule_dict: Dict[str, Any] = {
+                        "original": original_str,
+                        "replacement": replacement_str,
                         "is_regex": is_regex_bool
-                    })
+                    }
+                    if is_regex_bool:
+                        try:
+                            rule_dict["pattern_obj"] = re.compile(original_str)
+                        except Exception as error_obj:
+                            logger.error(f"Error compiling regex '{original_str}': {error_obj}")
+                            continue
+                    rules_list.append(rule_dict)
         return rules_list
     except Exception as error_obj:
         logger.error(f"Error loading rules: {error_obj}")
@@ -146,7 +158,11 @@ def enforce_terminology(text_str: str, rules_list: List[Dict[str, Any]]) -> str:
     """
     for rule_dict in rules_list:
         if rule_dict["is_regex"]:
-            text_str = re.sub(rule_dict["original"], rule_dict["replacement"], text_str)
+            if "pattern_obj" in rule_dict:
+                try:
+                    text_str = rule_dict["pattern_obj"].sub(rule_dict["replacement"], text_str)
+                except Exception as error_obj:
+                    logger.error(f"Error applying regex '{rule_dict['original']}': {error_obj}")
         else:
             text_str = text_str.replace(rule_dict["original"], rule_dict["replacement"])
     return text_str
@@ -160,11 +176,7 @@ def extract_metadata_from_filename(filename_str: str) -> Dict[str, str]:
         .replace(".srt", "")
         .strip()
     )
-    date_match_obj: Optional[re.Match] = re.search(
-        r'(Jan|Fev|Mar|Abr|Mai|Jun|Jul|Ago|Set|Out|Nov|Dez)\s+(\d{4})',
-        clean_name_str,
-        re.I
-    )
+    date_match_obj: Optional[re.Match] = DATE_EXTRACT_PATTERN.search(clean_name_str)
     
     title_str: str = clean_name_str
     event_date_str: str = "N/A"
@@ -177,7 +189,7 @@ def extract_metadata_from_filename(filename_str: str) -> Dict[str, str]:
         if "MasterMind" in clean_name_str:
             title_str = f"MasterMind {full_month_str} {year_str}"
             
-    video_id_match_obj: Optional[re.Match] = re.search(r'(?:\[|[-_])([a-zA-Z0-9_-]{11})(?:\])?$', clean_name_str)
+    video_id_match_obj: Optional[re.Match] = VIDEO_ID_PATTERN.search(clean_name_str)
     video_id_str: str = video_id_match_obj.group(1) if video_id_match_obj else "N/A"
     
     return {
@@ -200,7 +212,7 @@ class HeuristicProcessor:
         self.nlp_obj = spacy.load("pt_core_news_sm")
         # Configuramos o extrator de palavras-chave YAKE
         self.kw_extractor_obj = yake.KeywordExtractor(lan="pt", n=3, dedupLim=0.9, top=10)
-        # Extrator de palavras-chave para seções
+        # ⚡ BOLT OPTIMIZATION: Initialize section keyword extractor once to prevent repetitive slow instantiations in loops
         self.sec_kw_extractor_obj = yake.KeywordExtractor(lan="pt", n=2, top=3)
         # O TextTiling ajuda a dividir o texto em seções baseadas em mudança de tópico
         self.tt_tokenizer_obj = TextTilingTokenizer()
@@ -255,6 +267,7 @@ class HeuristicProcessor:
         
         output_str += "## Seções Temáticas\n"
         for i_int, section_str in enumerate(sections_list, 1):
+            # ⚡ BOLT OPTIMIZATION: Reuse self.sec_kw_extractor_obj instead of re-instantiating YAKE per section
             sec_keywords_list: List[str] = [kw[0] for kw in self.sec_kw_extractor_obj.extract_keywords(section_str)]
             sec_title_str: str = f"Seção {i_int}: " + (sec_keywords_list[0].capitalize() if sec_keywords_list else "Desenvolvimento")
             
