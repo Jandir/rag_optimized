@@ -217,9 +217,15 @@ class HeuristicProcessor:
         # O TextTiling ajuda a dividir o texto em seções baseadas em mudança de tópico
         self.tt_tokenizer_obj = TextTilingTokenizer()
 
+        # Compila a regex de filler words uma vez na inicialização
+        fillers_list: List[str] = [
+            r'\bne\b', r'\bentão\b', r'\btipo\b', r'\bsabe\b', r'\bpra\b', r'\btá\b', r'\bgente\b'
+        ]
+        self.fillers_pattern_obj: re.Pattern = re.compile('|'.join(fillers_list), re.IGNORECASE)
+
     def clean_filler_words(self, text_str: str) -> str:
         """Removes common Portuguese filler words via regex."""
-        return FILLER_WORDS_PATTERN.sub('', text_str).replace('  ', ' ').strip()
+        return self.fillers_pattern_obj.sub('', text_str).replace('  ', ' ').strip()
 
     def _extract_keywords(self, text_str: str) -> List[str]:
         """Extracts top keywords using YAKE."""
