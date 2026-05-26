@@ -131,16 +131,18 @@ def load_rules(rules_path_str: str = "rules.txt") -> List[Dict[str, Any]]:
                     line_str = line_str[6:].strip()
                 if '->' in line_str:
                     parts_list: List[str] = line_str.split('->', 1)
+                    original_str: str = parts_list[0].strip()
+                    replacement_str: str = parts_list[1].strip()
                     rule_dict: Dict[str, Any] = {
-                        "original": parts_list[0].strip(),
-                        "replacement": parts_list[1].strip(),
+                        "original": original_str,
+                        "replacement": replacement_str,
                         "is_regex": is_regex_bool
                     }
                     if is_regex_bool:
                         try:
-                            rule_dict["pattern"] = re.compile(rule_dict["original"])
+                            rule_dict["pattern_obj"] = re.compile(original_str)
                         except Exception as error_obj:
-                            logger.error(f"Error compiling regex '{rule_dict['original']}': {error_obj}")
+                            logger.error(f"Error compiling regex '{original_str}': {error_obj}")
                             continue
                     rules_list.append(rule_dict)
         return rules_list
@@ -156,10 +158,11 @@ def enforce_terminology(text_str: str, rules_list: List[Dict[str, Any]]) -> str:
     """
     for rule_dict in rules_list:
         if rule_dict["is_regex"]:
-            try:
-                text_str = rule_dict["pattern"].sub(rule_dict["replacement"], text_str)
-            except Exception as error_obj:
-                logger.error(f"Error substituting regex '{rule_dict['original']}': {error_obj}")
+            if "pattern_obj" in rule_dict:
+                try:
+                    text_str = rule_dict["pattern_obj"].sub(rule_dict["replacement"], text_str)
+                except Exception as error_obj:
+                    logger.error(f"Error applying regex '{rule_dict['original']}': {error_obj}")
         else:
             text_str = text_str.replace(rule_dict["original"], rule_dict["replacement"])
     return text_str
