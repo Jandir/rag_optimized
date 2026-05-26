@@ -40,15 +40,20 @@ if not GEMINI_API_KEY:
     logger.error("GEMINI_API_KEY not found in environment variables.")
     sys.exit(1)
 
-# ⚡ BOLT OPTIMIZATION: Pre-compile regexes and dictionary at module level
-MONTHS_PT = {
+# --- Helper Functions ---
+
+# ⚡ BOLT OPTIMIZATION: Pre-compile regexes at module level to avoid repeated compilation in loops
+DATE_EXTRACT_PATTERN = re.compile(r'(Jan|Fev|Mar|Abr|Mai|Jun|Jul|Ago|Set|Out|Nov|Dez)\s+(\d{4})', re.I)
+
+# ⚡ BOLT OPTIMIZATION: Define module-level dictionary to avoid instantiation inside functions
+MONTHS_PT: Dict[str, str] = {
     "Jan": "Janeiro", "Fev": "Fevereiro", "Mar": "Março", "Abr": "Abril",
     "Mai": "Maio", "Jun": "Junho", "Jul": "Julho", "Ago": "Agosto",
     "Set": "Setembro", "Out": "Outubro", "Nov": "Novembro", "Dez": "Dezembro",
-    1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
-    7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
+    "1": "Janeiro", "2": "Fevereiro", "3": "Março", "4": "Abril",
+    "5": "Maio", "6": "Junho", "7": "Julho", "8": "Agosto",
+    "9": "Setembro", "10": "Outubro", "11": "Novembro", "12": "Dezembro"
 }
-DATE_EXTRACT_PATTERN = re.compile(r'(Jan|Fev|Mar|Abr|Mai|Jun|Jul|Ago|Set|Out|Nov|Dez)\s+(\d{4})', re.I)
 
 # --- Rules Loading ---
 
@@ -213,11 +218,8 @@ def process_file(client: genai.Client, file_path: str, output_dir: str, rules: D
 
         # 0. Prep Metadata
         meta = extract_metadata_from_filename(filename)
-        current_date = datetime.now().strftime("%d de %B de %Y")
-        # Handle locale-specific month if possible, but for simplicity we can use a map or stick to system
-        # Actually, let's just use manual month mapping for current_date to be safe with user's PT-BR preference
         now = datetime.now()
-        current_date_str = f"{now.day} de {MONTHS_PT[now.month]} de {now.year}"
+        current_date_str = f"{now.day} de {MONTHS_PT[str(now.month)]} de {now.year}"
 
         # 1. Gemini Processing
         optimized_text = process_with_gemini(

@@ -6,6 +6,6 @@
 **Learning:** Compiling dynamic regular expressions on the fly (inside a loop) causes severe performance bottlenecks, especially when applying multiple rules across large documents (like video transcripts).
 **Action:** When working with dynamic regex rules loaded from configuration files, always pre-compile them during initialization (`re.compile`) and store the compiled patterns in memory. Furthermore, when executing `pattern.sub()`, wrap it in a `try...except` block to prevent failures from user-defined malformed replacement strings (such as invalid group references) at runtime.
 
-## 2024-05-24 - [Avoid Instantiating Static Dictionaries Inside Functions]
-**Learning:** Defining static dictionaries (like `months_map` or `months_pt`) inside frequently called functions (such as `extract_metadata_from_filename` or `process_file`) introduces unnecessary memory allocation and instantiation overhead during each function call.
-**Action:** Always hoist static configuration dictionaries to the module level as constants to reuse them across multiple invocations, preventing hidden micro-performance bottlenecks, especially when processing many files.
+## 2025-02-27 - [Avoiding Dictionary Re-instantiation in Loops]
+**Learning:** Defining static dictionaries (like months mappings) locally inside functions that are called repeatedly (e.g. `extract_metadata_from_filename` or during a file processing loop) incurs significant overhead due to constant re-instantiation in memory.
+**Action:** Always define static mapping dictionaries at the module/global level to ensure they are created once, saving memory allocations and processing time, especially during bulk operations.
