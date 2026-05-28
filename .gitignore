@@ -4,3 +4,4 @@ __pycache__/
 *$py.class
 .env
 *_rag_optimized.md
+venv/
