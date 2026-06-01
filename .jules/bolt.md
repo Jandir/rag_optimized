@@ -5,3 +5,6 @@
 ## 2026-05-21 - [Pre-compile dynamic user regexes]
 **Learning:** Using `re.sub(pattern, repl, string)` inside loops for dynamic configuration-based rules is a performance trap because Python dynamically compiles the regex pattern into a cached object on every iteration if it's not pre-compiled, causing a significant slowdown when processing multiple text blocks or files.
 **Action:** When applying dynamic rules loaded from configuration or user input (like `rules.txt`), pre-compile them during the initialization/loading phase using `re.compile(pattern)` (handling compilation errors with try/except), and use `pattern_obj.sub(repl, string)` during the loop processing phase.
+## 2023-10-27 - SpaCy Pipeline Initialization Overhead
+**Learning:** Loading the full default spaCy pipeline (like `pt_core_news_sm`) is extremely slow and memory-intensive if the tasks only require basic NLP operations like sentence tokenization and named entity recognition. Components like the parser, lemmatizer, and morphologizer add unnecessary overhead.
+**Action:** When initializing spaCy models for simple extraction tasks, explicitly disable unused pipeline components (e.g., `disable=["tagger", "morphologizer", "lemmatizer", "attribute_ruler", "parser"]`) and add lightweight components (like `sentencizer`) instead. This drastically reduces instantiation time and memory footprint.
