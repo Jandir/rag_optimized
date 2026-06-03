@@ -209,7 +209,9 @@ class HeuristicProcessor:
     def __init__(self):
         # Carregamos o modelo de Português do spaCy (NER e Sentenças)
         logger.info("Loading spaCy model...")
-        self.nlp_obj = spacy.load("pt_core_news_sm")
+        # ⚡ BOLT OPTIMIZATION: Disable unused pipeline components and use sentencizer to save memory and speed up processing
+        self.nlp_obj = spacy.load("pt_core_news_sm", disable=["tagger", "morphologizer", "lemmatizer", "attribute_ruler", "parser"])
+        self.nlp_obj.add_pipe("sentencizer")
         # Configuramos o extrator de palavras-chave YAKE
         self.kw_extractor_obj = yake.KeywordExtractor(lan="pt", n=3, dedupLim=0.9, top=10)
         # ⚡ BOLT OPTIMIZATION: Initialize section keyword extractor once to prevent repetitive slow instantiations in loops
