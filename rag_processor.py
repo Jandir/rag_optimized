@@ -32,7 +32,7 @@ MONTHS_PT = {
     7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
 }
 
-SRT_BLOCK_PATTERN = re.compile(r'(\d+)\n(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})\n((?:(?!\n\n).)*?)(?=\n\n|$)', re.DOTALL)
+SRT_BLOCK_PATTERN = re.compile(r'\d+\n\d{2}:\d{2}:\d{2},\d{3} --> \d{2}:\d{2}:\d{2},\d{3}\n(.*?)(?=\n\n|$)', re.DOTALL)
 HTML_TAG_PATTERN = re.compile(r'<[^>]*>')
 DATE_EXTRACT_PATTERN = re.compile(r'(Jan|Fev|Mar|Abr|Mai|Jun|Jul|Ago|Set|Out|Nov|Dez)\s+(\d{4})', re.I)
 
@@ -62,7 +62,7 @@ def clean_srt_content(content: str) -> str:
     
     blocks = []
     for match in SRT_BLOCK_PATTERN.finditer(content):
-        text_block = match.group(4).strip()
+        text_block = match.group(1).strip()
         
         # Clean HTML tags
         text_block = HTML_TAG_PATTERN.sub('', text_block)
@@ -191,18 +191,27 @@ def enforce_terminology(text: str, rules: List[Dict[str, Any]]) -> str:
         if rule["is_regex"]:
             if "pattern" in rule:
                 try:
-                    text = rule["pattern"].sub(replacement, text)
+                    text = rule["pattern"].sub(rule["replacement"], text)
                 except Exception as e:
-                    logger.error(f"Erro ao aplicar regex '{original}': {e}")
+                    logger.error(f"Erro ao aplicar regex '{rule['original']}': {e}")
         else:
-            text = text.replace(rule["original"], rule["replacement"])
+            if rule["original"] in text:
+                text = text.replace(rule["original"], rule["replacement"])
             
     return text
 
 def extract_metadata_from_filename(filename: str) -> Dict[str, str]:
     """Extracts title and event date from filename patterns."""
-    clean_name = filename.replace(" Transcrição.txt", "").replace(".txt", "")
-    clean_name = clean_name.replace(" Transcrição.srt", "").replace(".srt", "")
+    if filename.endswith(" Transcrição.txt"):
+        clean_name = filename[:-16]
+    elif filename.endswith(".txt"):
+        clean_name = filename[:-4]
+    elif filename.endswith(" Transcrição.srt"):
+        clean_name = filename[:-16]
+    elif filename.endswith(".srt"):
+        clean_name = filename[:-4]
+    else:
+        clean_name = filename
     clean_name = clean_name.strip()
     
     # Try to find date patterns like "Jan 2026"
