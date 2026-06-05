@@ -52,7 +52,7 @@ load_dotenv(os.path.join(SCRIPT_DIR_PATH, '.env'))
 # --- Helper Functions ---
 
 # ⚡ BOLT OPTIMIZATION: Pre-compile regexes at module level to avoid repeated compilation in loops
-SRT_BLOCK_PATTERN = re.compile(r'(\d+)\n(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})\n((?:(?!\n\n).)*?)(?=\n\n|$)', re.DOTALL)
+SRT_BLOCK_PATTERN = re.compile(r'\d+\n\d{2}:\d{2}:\d{2},\d{3} --> \d{2}:\d{2}:\d{2},\d{3}\n(.*?)(?=\n\n|$)', re.DOTALL)
 HTML_TAG_PATTERN = re.compile(r'<[^>]*>')
 DATE_EXTRACT_PATTERN = re.compile(r'(Jan|Fev|Mar|Abr|Mai|Jun|Jul|Ago|Set|Out|Nov|Dez)\s+(\d{4})', re.I)
 VIDEO_ID_PATTERN = re.compile(r'(?:\[|[-_])([a-zA-Z0-9_-]{11})(?:\])?$')
@@ -62,7 +62,7 @@ def _parse_srt_blocks(content_str: str) -> List[str]:
     """Extracts text blocks from SRT content, removing tags."""
     blocks_list: List[str] = []
     for match_obj in SRT_BLOCK_PATTERN.finditer(content_str):
-        text_block_str: str = match_obj.group(4).strip()
+        text_block_str: str = match_obj.group(1).strip()
         text_block_str = HTML_TAG_PATTERN.sub('', text_block_str)
         if text_block_str:
             blocks_list.append(text_block_str)
@@ -164,18 +164,24 @@ def enforce_terminology(text_str: str, rules_list: List[Dict[str, Any]]) -> str:
                 except Exception as error_obj:
                     logger.error(f"Error applying regex '{rule_dict['original']}': {error_obj}")
         else:
-            text_str = text_str.replace(rule_dict["original"], rule_dict["replacement"])
+            if rule_dict["original"] in text_str:
+                text_str = text_str.replace(rule_dict["original"], rule_dict["replacement"])
     return text_str
 
 def extract_metadata_from_filename(filename_str: str) -> Dict[str, str]:
     """Extracts title, date and video ID from the filename."""
-    clean_name_str: str = (
-        filename_str.replace(" Transcrição.txt", "")
-        .replace(".txt", "")
-        .replace(" Transcrição.srt", "")
-        .replace(".srt", "")
-        .strip()
-    )
+    if filename_str.endswith(" Transcrição.txt"):
+        clean_name_str: str = filename_str[:-16]
+    elif filename_str.endswith(".txt"):
+        clean_name_str = filename_str[:-4]
+    elif filename_str.endswith(" Transcrição.srt"):
+        clean_name_str = filename_str[:-16]
+    elif filename_str.endswith(".srt"):
+        clean_name_str = filename_str[:-4]
+    else:
+        clean_name_str = filename_str
+    clean_name_str = clean_name_str.strip()
+
     date_match_obj: Optional[re.Match] = DATE_EXTRACT_PATTERN.search(clean_name_str)
     
     title_str: str = clean_name_str
