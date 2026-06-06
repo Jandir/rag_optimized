@@ -64,8 +64,9 @@ def clean_srt_content(content: str) -> str:
     for match in SRT_BLOCK_PATTERN.finditer(content):
         text_block = match.group(1).strip()
         
-        # Clean HTML tags
-        text_block = HTML_TAG_PATTERN.sub('', text_block)
+        # ⚡ BOLT OPTIMIZATION: Clean HTML tags only if needed
+        if '<' in text_block:
+            text_block = HTML_TAG_PATTERN.sub('', text_block)
         
         if text_block:
             blocks.append(text_block)
