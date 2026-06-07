@@ -12,3 +12,7 @@
 ## 2025-05-18 - String Manipulation Overhead in High-Volume Parsing
 **Learning:** Sequential `.replace()` calls on strings, especially in frequently executed functions like metadata extractors or rules engines, create hidden overhead by generating multiple intermediate string objects. Similarly, `in` checks are much faster than full string replacements. In regex parsing, avoiding unnecessary capture groups and using non-greedy matches `(.*?)` is often noticeably faster than complex negative lookaheads for block parsing.
 **Action:** When enforcing large sets of terminology rules, always precede string replacements with an `if original in text:` check to avoid unnecessary operations. For metadata cleanup, use conditional `.endswith()` slicing instead of chained replacements. For regex, minimize capture groups to the bare minimum needed.
+
+## 2024-05-24 - [String Processing Fast Paths]
+**Learning:** Calling `re.sub()` or `.replace()` unconditionally in loop-heavy logic (like subtitle parsing or rules processing) introduces significant overhead even when the target string is absent. Furthermore, chaining `.replace()` to clean up strings (like suffixes in filenames) is inefficient.
+**Action:** Use a fast lightweight inclusion check (`if '<' in text:`, `if target in text:`) as a fast-path guard before calling regex substitutions or string replacements. Use conditional string slicing with `.endswith()` instead of chained `.replace()` calls to strip suffixes.

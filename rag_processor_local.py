@@ -63,7 +63,8 @@ def _parse_srt_blocks(content_str: str) -> List[str]:
     blocks_list: List[str] = []
     for match_obj in SRT_BLOCK_PATTERN.finditer(content_str):
         text_block_str: str = match_obj.group(1).strip()
-        text_block_str = HTML_TAG_PATTERN.sub('', text_block_str)
+        if '<' in text_block_str:
+            text_block_str = HTML_TAG_PATTERN.sub('', text_block_str)
         if text_block_str:
             blocks_list.append(text_block_str)
     return blocks_list
