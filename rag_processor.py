@@ -52,7 +52,9 @@ def clean_srt_content(content: str) -> str:
     Adapted from lexis-chunk.py.
     """
     # Normalize line breaks
-    content = content.replace('\r\n', '\n')
+    # ⚡ BOLT OPTIMIZATION: Added fast-path 'in' guard before string replace
+    if '\r\n' in content:
+        content = content.replace('\r\n', '\n')
     
     # Regex to identify subtitle blocks:
     # Number
@@ -65,7 +67,9 @@ def clean_srt_content(content: str) -> str:
         text_block = match.group(1).strip()
         
         # Clean HTML tags
-        text_block = HTML_TAG_PATTERN.sub('', text_block)
+        # ⚡ BOLT OPTIMIZATION: Fast-path 'in' guard bypasses expensive regex execution when tag isn't present
+        if '<' in text_block:
+            text_block = HTML_TAG_PATTERN.sub('', text_block)
         
         if text_block:
             blocks.append(text_block)
@@ -202,14 +206,15 @@ def enforce_terminology(text: str, rules: List[Dict[str, Any]]) -> str:
 
 def extract_metadata_from_filename(filename: str) -> Dict[str, str]:
     """Extracts title and event date from filename patterns."""
+    # ⚡ BOLT OPTIMIZATION: Avoid magic numbers in slicing length calculations
     if filename.endswith(" Transcrição.txt"):
-        clean_name = filename[:-16]
+        clean_name = filename[:-len(" Transcrição.txt")]
     elif filename.endswith(".txt"):
-        clean_name = filename[:-4]
+        clean_name = filename[:-len(".txt")]
     elif filename.endswith(" Transcrição.srt"):
-        clean_name = filename[:-16]
+        clean_name = filename[:-len(" Transcrição.srt")]
     elif filename.endswith(".srt"):
-        clean_name = filename[:-4]
+        clean_name = filename[:-len(".srt")]
     else:
         clean_name = filename
     clean_name = clean_name.strip()

@@ -12,3 +12,7 @@
 ## 2025-05-18 - String Manipulation Overhead in High-Volume Parsing
 **Learning:** Sequential `.replace()` calls on strings, especially in frequently executed functions like metadata extractors or rules engines, create hidden overhead by generating multiple intermediate string objects. Similarly, `in` checks are much faster than full string replacements. In regex parsing, avoiding unnecessary capture groups and using non-greedy matches `(.*?)` is often noticeably faster than complex negative lookaheads for block parsing.
 **Action:** When enforcing large sets of terminology rules, always precede string replacements with an `if original in text:` check to avoid unnecessary operations. For metadata cleanup, use conditional `.endswith()` slicing instead of chained replacements. For regex, minimize capture groups to the bare minimum needed.
+
+## 2024-05-18 - [Fast-path guards for string operations]
+**Learning:** Performing multiple string replacements or regex substitutions can be surprisingly expensive in Python, particularly when iterating over long texts or applying numerous rules where the matching substring rarely exists.
+**Action:** When executing `.replace()` or `pattern.sub()`, especially within loops, always prepend a lightweight fast-path guard using `in`, such as `if '<' in text:` or `if '\r\n' in text:`. This avoids calling the relatively expensive regex/replacement machinery entirely when the condition is unfulfilled. Also prefer `.endswith()` string slicing over chained `.replace()` calls when removing static suffixes.
