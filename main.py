@@ -108,13 +108,21 @@ def enforce_terminology(text: str, rules: List[Dict[str, Any]]) -> str:
                 except Exception as e:
                     logger.error(f"Erro ao aplicar regex '{original}': {e}")
         else:
-            text = text.replace(rule["original"], rule["replacement"])
+            if rule["original"] in text:
+                text = text.replace(rule["original"], rule["replacement"])
             
     return text
 
 def extract_metadata_from_filename(filename: str) -> Dict[str, str]:
     """Extracts title and event date from filename patterns."""
-    clean_name = filename.replace(" Transcrição.txt", "").replace(".txt", "").strip()
+    # ⚡ BOLT OPTIMIZATION: Replaced chained .replace() with conditional .endswith() slicing
+    if filename.endswith(" Transcrição.txt"):
+        clean_name = filename[:-len(" Transcrição.txt")]
+    elif filename.endswith(".txt"):
+        clean_name = filename[:-len(".txt")]
+    else:
+        clean_name = filename
+    clean_name = clean_name.strip()
     
     # Try to find date patterns like "Jan 2026"
     date_match = DATE_EXTRACT_PATTERN.search(clean_name)

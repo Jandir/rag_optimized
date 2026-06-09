@@ -63,7 +63,9 @@ def _parse_srt_blocks(content_str: str) -> List[str]:
     blocks_list: List[str] = []
     for match_obj in SRT_BLOCK_PATTERN.finditer(content_str):
         text_block_str: str = match_obj.group(1).strip()
-        text_block_str = HTML_TAG_PATTERN.sub('', text_block_str)
+        # ⚡ BOLT OPTIMIZATION: Fast-path check before regex substitution
+        if '<' in text_block_str:
+            text_block_str = HTML_TAG_PATTERN.sub('', text_block_str)
         if text_block_str:
             blocks_list.append(text_block_str)
     return blocks_list
@@ -106,7 +108,9 @@ def clean_srt_content(content_str: str) -> str:
     Muitas legendas geradas automaticamente repetem o texto anterior à medida que novas palavras aparecem.
     Esta função garante que tenhamos um texto corrido e limpo.
     """
-    content_str = content_str.replace('\r\n', '\n')
+    # ⚡ BOLT OPTIMIZATION: Fast-path check to avoid string re-allocation if \r\n not present
+    if '\r\n' in content_str:
+        content_str = content_str.replace('\r\n', '\n')
     # Primeiro, extraímos apenas os blocos de texto, ignorando os números e tempos.
     blocks_list: List[str] = _parse_srt_blocks(content_str)
     # Depois, comparamos os blocos para remover o que está repetido.
