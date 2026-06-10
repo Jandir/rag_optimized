@@ -104,11 +104,12 @@ def enforce_terminology(text: str, rules: List[Dict[str, Any]]) -> str:
         if rule["is_regex"]:
             if "pattern" in rule:
                 try:
-                    text = rule["pattern"].sub(replacement, text)
+                    text = rule["pattern"].sub(rule["replacement"], text)
                 except Exception as e:
-                    logger.error(f"Erro ao aplicar regex '{original}': {e}")
+                    logger.error(f"Erro ao aplicar regex '{rule['original']}': {e}")
         else:
-            text = text.replace(rule["original"], rule["replacement"])
+            if rule["original"] in text:
+                text = text.replace(rule["original"], rule["replacement"])
             
     return text
 
