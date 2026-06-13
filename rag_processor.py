@@ -52,7 +52,8 @@ def clean_srt_content(content: str) -> str:
     Adapted from lexis-chunk.py.
     """
     # Normalize line breaks
-    content = content.replace('\r\n', '\n')
+    if '\r\n' in content:
+        content = content.replace('\r\n', '\n')
     
     # Regex to identify subtitle blocks:
     # Number
@@ -65,7 +66,8 @@ def clean_srt_content(content: str) -> str:
         text_block = match.group(1).strip()
         
         # Clean HTML tags
-        text_block = HTML_TAG_PATTERN.sub('', text_block)
+        if '<' in text_block:
+            text_block = HTML_TAG_PATTERN.sub('', text_block)
         
         if text_block:
             blocks.append(text_block)
