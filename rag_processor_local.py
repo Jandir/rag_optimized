@@ -63,7 +63,8 @@ def _parse_srt_blocks(content_str: str) -> List[str]:
     blocks_list: List[str] = []
     for match_obj in SRT_BLOCK_PATTERN.finditer(content_str):
         text_block_str: str = match_obj.group(1).strip()
-        text_block_str = HTML_TAG_PATTERN.sub('', text_block_str)
+        if '<' in text_block_str:
+            text_block_str = HTML_TAG_PATTERN.sub('', text_block_str)
         if text_block_str:
             blocks_list.append(text_block_str)
     return blocks_list
@@ -171,13 +172,13 @@ def enforce_terminology(text_str: str, rules_list: List[Dict[str, Any]]) -> str:
 def extract_metadata_from_filename(filename_str: str) -> Dict[str, str]:
     """Extracts title, date and video ID from the filename."""
     if filename_str.endswith(" Transcrição.txt"):
-        clean_name_str: str = filename_str[:-16]
+        clean_name_str: str = filename_str[:-len(" Transcrição.txt")]
     elif filename_str.endswith(".txt"):
-        clean_name_str = filename_str[:-4]
+        clean_name_str = filename_str[:-len(".txt")]
     elif filename_str.endswith(" Transcrição.srt"):
-        clean_name_str = filename_str[:-16]
+        clean_name_str = filename_str[:-len(" Transcrição.srt")]
     elif filename_str.endswith(".srt"):
-        clean_name_str = filename_str[:-4]
+        clean_name_str = filename_str[:-len(".srt")]
     else:
         clean_name_str = filename_str
     clean_name_str = clean_name_str.strip()
