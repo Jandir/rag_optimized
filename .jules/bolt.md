@@ -12,3 +12,7 @@
 ## 2025-05-18 - String Manipulation Overhead in High-Volume Parsing
 **Learning:** Sequential `.replace()` calls on strings, especially in frequently executed functions like metadata extractors or rules engines, create hidden overhead by generating multiple intermediate string objects. Similarly, `in` checks are much faster than full string replacements. In regex parsing, avoiding unnecessary capture groups and using non-greedy matches `(.*?)` is often noticeably faster than complex negative lookaheads for block parsing.
 **Action:** When enforcing large sets of terminology rules, always precede string replacements with an `if original in text:` check to avoid unnecessary operations. For metadata cleanup, use conditional `.endswith()` slicing instead of chained replacements. For regex, minimize capture groups to the bare minimum needed.
+
+## 2026-06-25 - [String Split vs Regex for Block Parsing]
+**Learning:** Using complex regex with lookaheads (`(?=\n\n|$)`) to parse structured text blocks like SRT files is significantly slower than using native string operations like `.split('\n\n')`. Python's native string splitting is highly optimized in C and avoids the overhead of regex state machines.
+**Action:** When parsing well-structured files separated by predictable delimiters (like double newlines in SRTs), prefer using `string.split(delimiter)` combined with simple validation instead of complex multi-line regular expressions.
