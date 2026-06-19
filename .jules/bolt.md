@@ -12,3 +12,7 @@
 ## 2025-05-18 - String Manipulation Overhead in High-Volume Parsing
 **Learning:** Sequential `.replace()` calls on strings, especially in frequently executed functions like metadata extractors or rules engines, create hidden overhead by generating multiple intermediate string objects. Similarly, `in` checks are much faster than full string replacements. In regex parsing, avoiding unnecessary capture groups and using non-greedy matches `(.*?)` is often noticeably faster than complex negative lookaheads for block parsing.
 **Action:** When enforcing large sets of terminology rules, always precede string replacements with an `if original in text:` check to avoid unnecessary operations. For metadata cleanup, use conditional `.endswith()` slicing instead of chained replacements. For regex, minimize capture groups to the bare minimum needed.
+
+## 2026-06-20 - [Avoid complex multi-line regex for simple block parsing]
+**Learning:** Using multi-line regular expressions with lookaheads (like `re.DOTALL` with `(?=\n\n|$)`) to parse structured text blocks separated by predictable delimiters (e.g., double newlines in SRT files) is computationally expensive and slow compared to native string operations.
+**Action:** When parsing formats with clear block separators, replace complex multi-line regex approaches with native string operations, such as `.split('\n\n')` followed by simple validations (`'-->' in line`), to significantly improve parsing performance.
