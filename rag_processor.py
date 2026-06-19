@@ -32,7 +32,6 @@ MONTHS_PT = {
     7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
 }
 
-SRT_BLOCK_PATTERN = re.compile(r'\d+\n\d{2}:\d{2}:\d{2},\d{3} --> \d{2}:\d{2}:\d{2},\d{3}\n(.*?)(?=\n\n|$)', re.DOTALL)
 HTML_TAG_PATTERN = re.compile(r'<[^>]*>')
 DATE_EXTRACT_PATTERN = re.compile(r'(Jan|Fev|Mar|Abr|Mai|Jun|Jul|Ago|Set|Out|Nov|Dez)\s+(\d{4})', re.I)
 
@@ -54,22 +53,33 @@ def clean_srt_content(content: str) -> str:
     # Normalize line breaks
     content = content.replace('\r\n', '\n')
     
-    # Regex to identify subtitle blocks:
+    # Splitting logic to identify subtitle blocks:
     # Number
     # Timestamp --> Timestamp
     # Text... (can be multiple lines)
     # \n (separator blank line)
     
     blocks = []
-    for match in SRT_BLOCK_PATTERN.finditer(content):
-        text_block = match.group(1).strip()
-        
-        # Clean HTML tags
-        if '<' in text_block:
-            text_block = HTML_TAG_PATTERN.sub('', text_block)
-        
-        if text_block:
-            blocks.append(text_block)
+    # ⚡ BOLT OPTIMIZATION: Replacing multi-line regex with faster string split logic
+    raw_blocks = content.split('\n\n')
+    for block in raw_blocks:
+        lines = [line.strip() for line in block.split('\n') if line.strip()]
+        # Find the timestamp line which contains '-->'
+        timestamp_idx = -1
+        for i, line in enumerate(lines):
+            if '-->' in line:
+                timestamp_idx = i
+                break
+
+        if timestamp_idx != -1 and len(lines) > timestamp_idx + 1:
+            text_block = '\n'.join(lines[timestamp_idx+1:]).strip()
+
+            # Clean HTML tags
+            if '<' in text_block:
+                text_block = HTML_TAG_PATTERN.sub('', text_block)
+
+            if text_block:
+                blocks.append(text_block)
 
     # Logical Deduplication
     cleaned_lines = []
