@@ -107,7 +107,8 @@ def clean_srt_content(content_str: str) -> str:
     Muitas legendas geradas automaticamente repetem o texto anterior à medida que novas palavras aparecem.
     Esta função garante que tenhamos um texto corrido e limpo.
     """
-    content_str = content_str.replace('\r\n', '\n')
+    if '\r\n' in content_str:
+        content_str = content_str.replace('\r\n', '\n')
     # Primeiro, extraímos apenas os blocos de texto, ignorando os números e tempos.
     blocks_list: List[str] = _parse_srt_blocks(content_str)
     # Depois, comparamos os blocos para remover o que está repetido.

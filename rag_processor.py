@@ -52,7 +52,8 @@ def clean_srt_content(content: str) -> str:
     Adapted from lexis-chunk.py.
     """
     # Normalize line breaks
-    content = content.replace('\r\n', '\n')
+    if '\r\n' in content:
+        content = content.replace('\r\n', '\n')
     
     # Regex to identify subtitle blocks:
     # Number
