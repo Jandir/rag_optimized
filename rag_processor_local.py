@@ -52,7 +52,6 @@ load_dotenv(os.path.join(SCRIPT_DIR_PATH, '.env'))
 # --- Helper Functions ---
 
 # ⚡ BOLT OPTIMIZATION: Pre-compile regexes at module level to avoid repeated compilation in loops
-SRT_BLOCK_PATTERN = re.compile(r'\d+\n\d{2}:\d{2}:\d{2},\d{3} --> \d{2}:\d{2}:\d{2},\d{3}\n(.*?)(?=\n\n|$)', re.DOTALL)
 HTML_TAG_PATTERN = re.compile(r'<[^>]*>')
 DATE_EXTRACT_PATTERN = re.compile(r'(Jan|Fev|Mar|Abr|Mai|Jun|Jul|Ago|Set|Out|Nov|Dez)\s+(\d{4})', re.I)
 VIDEO_ID_PATTERN = re.compile(r'(?:\[|[-_])([a-zA-Z0-9_-]{11})(?:\])?$')
@@ -60,13 +59,27 @@ FILLER_WORDS_PATTERN = re.compile(r'\bne\b|\bentão\b|\btipo\b|\bsabe\b|\bpra\b|
 
 def _parse_srt_blocks(content_str: str) -> List[str]:
     """Extracts text blocks from SRT content, removing tags."""
+    # ⚡ BOLT OPTIMIZATION: Replaced multi-line regex with significantly faster native string splitting
     blocks_list: List[str] = []
-    for match_obj in SRT_BLOCK_PATTERN.finditer(content_str):
-        text_block_str: str = match_obj.group(1).strip()
-        if '<' in text_block_str:
-            text_block_str = HTML_TAG_PATTERN.sub('', text_block_str)
-        if text_block_str:
-            blocks_list.append(text_block_str)
+    for raw_block_str in content_str.split('\n\n'):
+        if not raw_block_str:
+            continue
+
+        lines_list: List[str] = raw_block_str.strip().split('\n')
+        text_start_int: int = -1
+
+        for i_int, line_str in enumerate(lines_list):
+            if '-->' in line_str:
+                text_start_int = i_int + 1
+                break
+
+        if text_start_int != -1 and text_start_int < len(lines_list):
+            text_block_str: str = '\n'.join(lines_list[text_start_int:]).strip()
+            if '<' in text_block_str:
+                text_block_str = HTML_TAG_PATTERN.sub('', text_block_str)
+            if text_block_str:
+                blocks_list.append(text_block_str)
+
     return blocks_list
 
 def _deduplicate_srt_lines(blocks_list: List[str]) -> List[str]:
