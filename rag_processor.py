@@ -32,7 +32,6 @@ MONTHS_PT = {
     7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
 }
 
-SRT_BLOCK_PATTERN = re.compile(r'\d+\n\d{2}:\d{2}:\d{2},\d{3} --> \d{2}:\d{2}:\d{2},\d{3}\n(.*?)(?=\n\n|$)', re.DOTALL)
 HTML_TAG_PATTERN = re.compile(r'<[^>]*>')
 DATE_EXTRACT_PATTERN = re.compile(r'(Jan|Fev|Mar|Abr|Mai|Jun|Jul|Ago|Set|Out|Nov|Dez)\s+(\d{4})', re.I)
 
@@ -54,15 +53,24 @@ def clean_srt_content(content: str) -> str:
     # Normalize line breaks
     content = content.replace('\r\n', '\n')
     
-    # Regex to identify subtitle blocks:
+    # Parse subtitle blocks by splitting on double newlines
     # Number
     # Timestamp --> Timestamp
     # Text... (can be multiple lines)
-    # \n (separator blank line)
     
     blocks = []
-    for match in SRT_BLOCK_PATTERN.finditer(content):
-        text_block = match.group(1).strip()
+    for block in content.split('\n\n'):
+        lines = block.strip().split('\n')
+        text_lines = []
+        found_arrow = False
+
+        for line in lines:
+            if found_arrow:
+                text_lines.append(line)
+            elif '-->' in line:
+                found_arrow = True
+
+        text_block = '\n'.join(text_lines).strip()
         
         # Clean HTML tags
         if '<' in text_block:
