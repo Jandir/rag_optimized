@@ -60,13 +60,24 @@ FILLER_WORDS_PATTERN = re.compile(r'\bne\b|\bentão\b|\btipo\b|\bsabe\b|\bpra\b|
 
 def _parse_srt_blocks(content_str: str) -> List[str]:
     """Extracts text blocks from SRT content, removing tags."""
+    # ⚡ BOLT OPTIMIZATION: Use fast native string split instead of multi-line regex
     blocks_list: List[str] = []
-    for match_obj in SRT_BLOCK_PATTERN.finditer(content_str):
-        text_block_str: str = match_obj.group(1).strip()
-        if '<' in text_block_str:
-            text_block_str = HTML_TAG_PATTERN.sub('', text_block_str)
-        if text_block_str:
-            blocks_list.append(text_block_str)
+    for block_str in content_str.split('\n\n'):
+        lines_list: List[str] = block_str.split('\n')
+        text_lines_list: List[str] = []
+        found_arrow_bool: bool = False
+        for line_str in lines_list:
+            if found_arrow_bool:
+                text_lines_list.append(line_str)
+            elif '-->' in line_str:
+                found_arrow_bool = True
+
+        if found_arrow_bool:
+            text_block_str: str = '\n'.join(text_lines_list).strip()
+            if '<' in text_block_str:
+                text_block_str = HTML_TAG_PATTERN.sub('', text_block_str)
+            if text_block_str:
+                blocks_list.append(text_block_str)
     return blocks_list
 
 def _deduplicate_srt_lines(blocks_list: List[str]) -> List[str]:
@@ -76,6 +87,10 @@ def _deduplicate_srt_lines(blocks_list: List[str]) -> List[str]:
         return cleaned_lines_list
 
     cleaned_lines_list.append(blocks_list[0])
+
+    # ⚡ BOLT OPTIMIZATION: Cache prev_lines_list to avoid recalculating in every iteration
+    prev_lines_list: List[str] = [l.strip() for l in blocks_list[0].split('\n') if l.strip()]
+
     for i_int in range(1, len(blocks_list)):
         prev_text_str: str = blocks_list[i_int - 1]
         curr_text_str: str = blocks_list[i_int]
@@ -84,9 +99,10 @@ def _deduplicate_srt_lines(blocks_list: List[str]) -> List[str]:
             new_part_str: str = curr_text_str[len(prev_text_str):].strip()
             if new_part_str:
                 cleaned_lines_list.append(new_part_str)
+            # Recalculate prev_lines_list for the next iteration
+            prev_lines_list = [l.strip() for l in curr_text_str.split('\n') if l.strip()]
             continue
 
-        prev_lines_list: List[str] = [l.strip() for l in prev_text_str.split('\n') if l.strip()]
         curr_lines_list: List[str] = [l.strip() for l in curr_text_str.split('\n') if l.strip()]
         start_idx_int: int = 0
 
@@ -96,8 +112,12 @@ def _deduplicate_srt_lines(blocks_list: List[str]) -> List[str]:
             elif len(prev_lines_list) < len(curr_lines_list) and curr_lines_list[:len(prev_lines_list)] == prev_lines_list:
                 start_idx_int = len(prev_lines_list)
 
-        for j_int in range(start_idx_int, len(curr_lines_list)):
-            cleaned_lines_list.append(curr_lines_list[j_int])
+        # ⚡ BOLT OPTIMIZATION: Use list extend instead of loop append
+        if start_idx_int < len(curr_lines_list):
+            cleaned_lines_list.extend(curr_lines_list[start_idx_int:])
+
+        # Cache for the next iteration
+        prev_lines_list = curr_lines_list
 
     return cleaned_lines_list
 

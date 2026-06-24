@@ -54,22 +54,25 @@ def clean_srt_content(content: str) -> str:
     # Normalize line breaks
     content = content.replace('\r\n', '\n')
     
-    # Regex to identify subtitle blocks:
-    # Number
-    # Timestamp --> Timestamp
-    # Text... (can be multiple lines)
-    # \n (separator blank line)
-    
+    # ⚡ BOLT OPTIMIZATION: Use fast native string split instead of multi-line regex
     blocks = []
-    for match in SRT_BLOCK_PATTERN.finditer(content):
-        text_block = match.group(1).strip()
+    for block in content.split('\n\n'):
+        lines = block.split('\n')
+        text_lines = []
+        found_arrow = False
+        for line in lines:
+            if found_arrow:
+                text_lines.append(line)
+            elif '-->' in line:
+                found_arrow = True
         
-        # Clean HTML tags
-        if '<' in text_block:
-            text_block = HTML_TAG_PATTERN.sub('', text_block)
-        
-        if text_block:
-            blocks.append(text_block)
+        if found_arrow:
+            text_block = '\n'.join(text_lines).strip()
+            # Clean HTML tags
+            if '<' in text_block:
+                text_block = HTML_TAG_PATTERN.sub('', text_block)
+            if text_block:
+                blocks.append(text_block)
 
     # Logical Deduplication
     cleaned_lines = []
@@ -78,6 +81,9 @@ def clean_srt_content(content: str) -> str:
         current_text = blocks[0]
         cleaned_lines.append(current_text)
         
+        # ⚡ BOLT OPTIMIZATION: Cache prev_lines to avoid recalculating in every iteration
+        prev_lines = [l.strip() for l in current_text.split('\n') if l.strip()]
+
         for i in range(1, len(blocks)):
             prev_text = blocks[i-1]
             curr_text = blocks[i]
@@ -88,10 +94,11 @@ def clean_srt_content(content: str) -> str:
                 new_part = curr_text[len(prev_text):].strip()
                 if new_part:
                     cleaned_lines.append(new_part)
+                # Recalculate prev_lines for the next iteration
+                prev_lines = [l.strip() for l in curr_text.split('\n') if l.strip()]
                 continue
                 
             # Case 2: Line by line strategy for "A\nB" -> "B\nC"
-            prev_lines = [l.strip() for l in prev_text.split('\n') if l.strip()]
             curr_lines = [l.strip() for l in curr_text.split('\n') if l.strip()]
             
             start_idx = 0
@@ -101,8 +108,12 @@ def clean_srt_content(content: str) -> str:
                 elif len(prev_lines) < len(curr_lines) and curr_lines[:len(prev_lines)] == prev_lines:
                     start_idx = len(prev_lines)
 
-            for j in range(start_idx, len(curr_lines)):
-                cleaned_lines.append(curr_lines[j])
+            # ⚡ BOLT OPTIMIZATION: Use list extend instead of loop append
+            if start_idx < len(curr_lines):
+                cleaned_lines.extend(curr_lines[start_idx:])
+
+            # Cache for the next iteration
+            prev_lines = curr_lines
 
     return ' '.join(cleaned_lines)
 
