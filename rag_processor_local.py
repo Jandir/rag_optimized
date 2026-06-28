@@ -60,24 +60,18 @@ FILLER_WORDS_PATTERN = re.compile(r'\bne\b|\bentão\b|\btipo\b|\bsabe\b|\bpra\b|
 
 def _parse_srt_blocks(content_str: str) -> List[str]:
     """Extracts text blocks from SRT content, removing tags."""
-    # ⚡ BOLT OPTIMIZATION: Use fast native string split instead of multi-line regex
+    # ⚡ BOLT OPTIMIZATION: Use fast native string search (str.find) and slicing instead of splitting blocks into lines
     blocks_list: List[str] = []
     for block_str in content_str.split('\n\n'):
-        lines_list: List[str] = block_str.split('\n')
-        text_lines_list: List[str] = []
-        found_arrow_bool: bool = False
-        for line_str in lines_list:
-            if found_arrow_bool:
-                text_lines_list.append(line_str)
-            elif '-->' in line_str:
-                found_arrow_bool = True
-
-        if found_arrow_bool:
-            text_block_str: str = '\n'.join(text_lines_list).strip()
-            if '<' in text_block_str:
-                text_block_str = HTML_TAG_PATTERN.sub('', text_block_str)
-            if text_block_str:
-                blocks_list.append(text_block_str)
+        arrow_idx_int: int = block_str.find('-->')
+        if arrow_idx_int != -1:
+            newline_idx_int: int = block_str.find('\n', arrow_idx_int)
+            if newline_idx_int != -1:
+                text_block_str: str = block_str[newline_idx_int + 1:].strip()
+                if '<' in text_block_str:
+                    text_block_str = HTML_TAG_PATTERN.sub('', text_block_str)
+                if text_block_str:
+                    blocks_list.append(text_block_str)
     return blocks_list
 
 def _deduplicate_srt_lines(blocks_list: List[str]) -> List[str]:
@@ -185,8 +179,7 @@ def enforce_terminology(text_str: str, rules_list: List[Dict[str, Any]]) -> str:
                 except Exception as error_obj:
                     logger.error(f"Error applying regex '{rule_dict['original']}': {error_obj}")
         else:
-            if rule_dict["original"] in text_str:
-                text_str = text_str.replace(rule_dict["original"], rule_dict["replacement"])
+            text_str = text_str.replace(rule_dict["original"], rule_dict["replacement"])
     return text_str
 
 def extract_metadata_from_filename(filename_str: str) -> Dict[str, str]:
