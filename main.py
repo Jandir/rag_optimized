@@ -108,8 +108,9 @@ def enforce_terminology(text: str, rules: List[Dict[str, Any]]) -> str:
                 except Exception as e:
                     logger.error(f"Erro ao aplicar regex '{rule['original']}': {e}")
         else:
-            if rule["original"] in text:
-                text = text.replace(rule["original"], rule["replacement"])
+            # ⚡ BOLT OPTIMIZATION: Python's native str.replace is highly optimized in C.
+            # Adding a manual `if in` check before replace() adds unnecessary Python overhead.
+            text = text.replace(rule["original"], rule["replacement"])
             
     return text
 

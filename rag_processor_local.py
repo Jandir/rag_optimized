@@ -185,8 +185,9 @@ def enforce_terminology(text_str: str, rules_list: List[Dict[str, Any]]) -> str:
                 except Exception as error_obj:
                     logger.error(f"Error applying regex '{rule_dict['original']}': {error_obj}")
         else:
-            if rule_dict["original"] in text_str:
-                text_str = text_str.replace(rule_dict["original"], rule_dict["replacement"])
+            # ⚡ BOLT OPTIMIZATION: Python's native str.replace is highly optimized in C.
+            # Adding a manual `if in` check before replace() adds unnecessary Python overhead.
+            text_str = text_str.replace(rule_dict["original"], rule_dict["replacement"])
     return text_str
 
 def extract_metadata_from_filename(filename_str: str) -> Dict[str, str]:

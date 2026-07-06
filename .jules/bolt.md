@@ -16,3 +16,7 @@
 ## 2024-06-24 - [Avoid Multiline Regex for Structured Blocks]
 **Learning:** For parsing structured text blocks separated by predictable delimiters (like double newlines in SRT files), native string operations like `.split('\n\n')` with iterative line checks are significantly faster (up to ~2x) than using complex multi-line regular expressions with negative lookaheads (`re.DOTALL`, `(?=\n\n|$)`). Also, caching list comprehensions and using `list.extend()` instead of loop-appends can speed up line-by-line deduplication operations by ~30-40%.
 **Action:** When extracting blocks of text that are predictably delimited (like blank lines), prefer `text.split('\n\n')` over regex `finditer()`. Always cache results of expensive operations (like string splitting) that are reused across loop iterations, and prefer bulk list operations like `.extend()` over `.append()` in a loop.
+
+## 2026-07-06 - [Redundant 'in' check before str.replace()]
+**Learning:** Adding an `if substring in text:` check before calling Python's native `text.replace()` is an anti-pattern that actually degrades performance. Python's `str.replace()` implementation is heavily optimized in C and already performs an extremely fast substring search internally before allocating any memory for replacement. Doing the check manually in Python adds unnecessary bytecode evaluation overhead.
+**Action:** Remove redundant `if original in text:` checks before standard `str.replace()` calls. Only use fast-path inclusion checks before expensive operations like regex `pattern.sub()`.
