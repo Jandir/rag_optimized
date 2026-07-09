@@ -54,25 +54,19 @@ def clean_srt_content(content: str) -> str:
     # Normalize line breaks
     content = content.replace('\r\n', '\n')
     
-    # ⚡ BOLT OPTIMIZATION: Use fast native string split instead of multi-line regex
+    # ⚡ BOLT OPTIMIZATION: Use fast native string search (.find) and slicing instead of splitting blocks into lines and iterating
     blocks = []
     for block in content.split('\n\n'):
-        lines = block.split('\n')
-        text_lines = []
-        found_arrow = False
-        for line in lines:
-            if found_arrow:
-                text_lines.append(line)
-            elif '-->' in line:
-                found_arrow = True
-        
-        if found_arrow:
-            text_block = '\n'.join(text_lines).strip()
-            # Clean HTML tags
-            if '<' in text_block:
-                text_block = HTML_TAG_PATTERN.sub('', text_block)
-            if text_block:
-                blocks.append(text_block)
+        arrow_idx = block.find('-->')
+        if arrow_idx != -1:
+            newline_idx = block.find('\n', arrow_idx)
+            if newline_idx != -1:
+                text_block = block[newline_idx + 1:].strip()
+                # Clean HTML tags
+                if '<' in text_block:
+                    text_block = HTML_TAG_PATTERN.sub('', text_block)
+                if text_block:
+                    blocks.append(text_block)
 
     # Logical Deduplication
     cleaned_lines = []
