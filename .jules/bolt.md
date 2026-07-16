@@ -16,3 +16,7 @@
 ## 2024-06-24 - [Avoid Multiline Regex for Structured Blocks]
 **Learning:** For parsing structured text blocks separated by predictable delimiters (like double newlines in SRT files), native string operations like `.split('\n\n')` with iterative line checks are significantly faster (up to ~2x) than using complex multi-line regular expressions with negative lookaheads (`re.DOTALL`, `(?=\n\n|$)`). Also, caching list comprehensions and using `list.extend()` instead of loop-appends can speed up line-by-line deduplication operations by ~30-40%.
 **Action:** When extracting blocks of text that are predictably delimited (like blank lines), prefer `text.split('\n\n')` over regex `finditer()`. Always cache results of expensive operations (like string splitting) that are reused across loop iterations, and prefer bulk list operations like `.extend()` over `.append()` in a loop.
+
+## 2026-06-25 - [Use str.find instead of split for parsing structured blocks]
+**Learning:** When trying to locate specific markers within structured text blocks separated by predictable delimiters (like the '-->' timestamp line in SRT files), splitting the block into lines and iterating over them is inefficient and causes unnecessary memory allocations. Fast native string searches (`str.find`) combined with slicing is computationally faster.
+**Action:** When parsing blocks, prefer `str.find()` and string slicing over `.split('\n')` and iterating whenever you need to find a single marker and extract the text after it.
