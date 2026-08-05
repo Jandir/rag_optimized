@@ -20,3 +20,7 @@
 ## 2024-08-02 - [Avoid creating intermediate lists when searching substrings]
 **Learning:** When parsing structured text blocks separated by predictable delimiters (like double newlines in SRT files) to extract a specific portion after a marker, splitting the block into a list of lines and iterating over it is slower and uses more memory than using native `str.find` to locate the marker and slicing the string directly. Benchmarks show `str.find` is ~2-3x faster.
 **Action:** To locate specific markers within those blocks (like the '-->' timestamp line), use fast native string searches (`str.find`) and index slicing instead of splitting blocks into individual lines and iterating, which avoids unnecessary memory allocations and is computationally faster.
+
+## 2026-06-15 - [Avoid String Concatenation in Loops for Markdown Generation]
+**Learning:** Sequential string concatenation using `+=` inside loops or for building large text blocks (like markdown documents) creates a hidden O(n²) performance overhead because Python strings are immutable, leading to continuous memory reallocation and copying. Using a list to append string parts and then calling `"".join(list)` is significantly faster and uses less memory.
+**Action:** When building large documents from multiple sections, always use a list to gather parts (`parts_list.append()`) and finally assemble them with `"".join(parts_list)` instead of chaining `+=` operators.
