@@ -279,37 +279,40 @@ class HeuristicProcessor:
         now_obj: datetime = datetime.now()
         current_date_str: str = f"{now_obj.day} de {MONTHS_PT_DICT[str(now_obj.month)]} de {now_obj.year}"
 
-        output_str: str = "---\n"
-        output_str += f"id: \"{meta_dict['video_id']}\"\n"
-        output_str += f"title: \"{meta_dict['title']}\"\n"
-        output_str += f"transcription_date: \"{current_date_str}\"\n"
-        output_str += f"event_date: \"{meta_dict['event_date']}\"\n"
+        # ⚡ BOLT OPTIMIZATION: Use list to gather parts and assemble with ''.join() to avoid O(n²) memory reallocation overhead
+        parts_list: List[str] = []
+
+        parts_list.append("---\n")
+        parts_list.append(f"id: \"{meta_dict['video_id']}\"\n")
+        parts_list.append(f"title: \"{meta_dict['title']}\"\n")
+        parts_list.append(f"transcription_date: \"{current_date_str}\"\n")
+        parts_list.append(f"event_date: \"{meta_dict['event_date']}\"\n")
 
         main_subjects = ', '.join([f'"{ent}"' for ent in entities_list]) if entities_list else '"Conteúdo Geral"'
-        output_str += f"main_subjects: [{main_subjects}]\n"
-        output_str += "target_audience: [\"Líderes\", \"Ekklezia\", \"Mesa do Conselho\"]\n"
+        parts_list.append(f"main_subjects: [{main_subjects}]\n")
+        parts_list.append("target_audience: [\"Líderes\", \"Ekklezia\", \"Mesa do Conselho\"]\n")
 
         kws = ', '.join([f'"{kw}"' for kw in keywords_list])
-        output_str += f"keywords: [{kws}]\n"
-        output_str += "---\n\n"
+        parts_list.append(f"keywords: [{kws}]\n")
+        parts_list.append("---\n\n")
 
-        output_str += f"# {meta_dict['title']}\n\n"
+        parts_list.append(f"# {meta_dict['title']}\n\n")
 
         if entities_list:
-            output_str += "## Escopo de Entidades (Contexto Automático)\n"
-            output_str += f"Este documento aborda principalmente: **{', '.join(entities_list)}**.\n\n"
+            parts_list.append("## Escopo de Entidades (Contexto Automático)\n")
+            parts_list.append(f"Este documento aborda principalmente: **{', '.join(entities_list)}**.\n\n")
         
-        output_str += "## Seções Temáticas\n"
+        parts_list.append("## Seções Temáticas\n")
         for i_int, section_str in enumerate(sections_list, 1):
             # ⚡ BOLT OPTIMIZATION: Reuse self.sec_kw_extractor_obj instead of re-instantiating YAKE per section
             sec_keywords_list: List[str] = [kw[0] for kw in self.sec_kw_extractor_obj.extract_keywords(section_str)]
             sec_title_str: str = f"Seção {i_int}: " + (sec_keywords_list[0].capitalize() if sec_keywords_list else "Desenvolvimento")
             
-            output_str += f"### {sec_title_str}\n"
-            output_str += f"**Tags:** {' '.join(['#'+kw.replace(' ', '') for kw in sec_keywords_list])}\n\n"
-            output_str += f"{section_str.strip()}\n\n"
+            parts_list.append(f"### {sec_title_str}\n")
+            parts_list.append(f"**Tags:** {' '.join(['#'+kw.replace(' ', '') for kw in sec_keywords_list])}\n\n")
+            parts_list.append(f"{section_str.strip()}\n\n")
 
-        return output_str
+        return ''.join(parts_list)
 
     def process(self, text_str: str, meta_dict: Dict[str, str]) -> str:
         """
