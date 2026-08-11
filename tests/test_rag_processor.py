@@ -1,32 +1,63 @@
 import pytest
 import os
-import sys
-from unittest.mock import MagicMock
+from rag_processor import (
+    clean_srt_content,
+    extract_metadata_from_filename,
+    enforce_terminology,
+    _parse_srt_blocks,
+    _handle_simple_repetition,
+    _handle_partial_overlap
+)
 
-# Mock google.genai and dotenv before importing rag_processor
-sys.modules['google'] = MagicMock()
-sys.modules['google.genai'] = MagicMock()
-sys.modules['dotenv'] = MagicMock()
+def test_clean_srt_content_simple():
+    srt_content = """1
+00:00:01,000 --> 00:00:02,000
+Hello world
 
-os.environ['GEMINI_API_KEY'] = 'dummy_key'
+2
+00:00:02,000 --> 00:00:03,000
+Hello world
+How are you
+"""
+    # Rollup logic: if 2nd block starts with 1st, it's deduplicated
+    cleaned = clean_srt_content(srt_content)
+    assert "Hello world How are you" in cleaned
 
-# Add parent directory to path so we can import from rag_processor
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+def test_extract_metadata_mastermind():
+    filename = "MasterMind Abr 2024 Transcrição.txt"
+    meta = extract_metadata_from_filename(filename)
+    assert meta["title"] == "MasterMind Abril 2024"
+    assert meta["event_date"] == "Abril de 2024"
+    assert meta["video_id"] == "N/A"
 
-from rag_processor import format_duration
+def test_extract_metadata_with_id():
+    filename = "Aula_Ekklezia [abc123_-XYZ].srt"
+    meta = extract_metadata_from_filename(filename)
+    assert meta["video_id"] == "abc123_-XYZ"
 
-def test_format_duration_seconds():
-    assert format_duration(30.0) == "30.00 segundos"
-    assert format_duration(59.99) == "59.99 segundos"
-    assert format_duration(0.0) == "0.00 segundos"
+def test_enforce_terminology():
+    rules = [
+        {"original": "Sete Montes", "replacement": "7 Montes", "is_regex": False},
+        {"original": r"vixe\s+maria", "replacement": "caramba", "is_regex": True}
+    ]
+    text = "Falamos sobre Sete Montes e vixe  maria que aula."
+    result = enforce_terminology(text, rules)
+    assert "7 Montes" in result
+    assert "caramba" in result
 
-def test_format_duration_minutes():
-    assert format_duration(60.0) == "1m 0s"
-    assert format_duration(90.0) == "1m 30s"
-    assert format_duration(3599.0) == "59m 59s"
+def test_parse_srt_blocks():
+    srt = "1\n00:00:00,000 --> 00:00:01,000\n<b>Bold</b> text\n\n"
+    blocks = _parse_srt_blocks(srt)
+    assert blocks == ["Bold text"]
 
-def test_format_duration_hours():
-    assert format_duration(3600.0) == "1h 0m 0s"
-    assert format_duration(3665.0) == "1h 1m 5s"
-    assert format_duration(7200.0) == "2h 0m 0s"
-    assert format_duration(7325.0) == "2h 2m 5s"
+def test_handle_simple_repetition():
+    prev = "O reino de Deus"
+    curr = "O reino de Deus está próximo"
+    result = _handle_simple_repetition(prev, curr)
+    assert result == "está próximo"
+
+def test_handle_partial_overlap():
+    prev = "Linha 1\nLinha 2"
+    curr = "Linha 2\nLinha 3"
+    result = _handle_partial_overlap(prev, curr)
+    assert result == ["Linha 3"]

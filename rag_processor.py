@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
 """
-Script: rag_processor.py
-Description: Automates the adaptation of video transcripts for RAG (Retrieval-Augmented Generation).
-             Uses Gemini Flash to structure content, add metadata, and enforce terminology rules.
-             Optimized with parallel processing, API client reuse, and external rules configuration.
+RAG Processor - Video Transcript Transformer
+============================================
+An automated tool designed to transform raw video transcripts (YouTube/SRT) into 
+high-quality, structured Markdown files optimized for RAG (Retrieval-Augmented Generation).
 
-Terminology Rules:
-- Loaded from rules.txt (Sete Montes, Ekklezia, etc.)
+Key Features:
+- Structured Enhancement: Leverages Gemini Flash to add metadata, themes, and actionable tags.
+- Data Sanitation: Cleans YouTube "rollup" subtitling and handles SRT timestamps.
+- Terminology Compliance: Enforces project-specific nomenclature (e.g., Sete Montes, Ekklezia).
+- Performance Optimized: Multi-threading for batch processing and efficient API usage.
+- Intelligent Metadata: Extracts titles, event dates, and unique video IDs from filenames.
 """
 
 import os
@@ -15,29 +19,21 @@ import re
 import argparse
 import logging
 import time
+import glob
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, List, Any
+from typing import Dict, List, Optional, Any
+
 from google import genai
 from dotenv import load_dotenv
 
-# --- Helper Functions ---
+# --- EDUCATIVO: O QUE ESTE SCRIPT FAZ? ---
+# Este script automatiza a transformação de transcrições de vídeo brutas (do YouTube ou arquivos .srt)
+# em documentos Markdown estruturados e otimizados para sistemas RAG (Retrieval-Augmented Generation).
+# Ele utiliza a API do Gemini Flash da Google para o processamento inteligente do texto.
 
-# ⚡ BOLT OPTIMIZATION: Pre-compile regexes at module level to avoid repeated compilation in loops
-MONTHS_PT = {
-    "Jan": "Janeiro", "Fev": "Fevereiro", "Mar": "Março", "Abr": "Abril",
-    "Mai": "Maio", "Jun": "Junho", "Jul": "Julho", "Ago": "Agosto",
-    "Set": "Setembro", "Out": "Outubro", "Nov": "Novembro", "Dez": "Dezembro",
-    1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho",
-    7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
-}
-
-SRT_BLOCK_PATTERN = re.compile(r'\d+\n\d{2}:\d{2}:\d{2},\d{3} --> \d{2}:\d{2}:\d{2},\d{3}\n(.*?)(?=\n\n|$)', re.DOTALL)
-HTML_TAG_PATTERN = re.compile(r'<[^>]*>')
-DATE_EXTRACT_PATTERN = re.compile(r'(Jan|Fev|Mar|Abr|Mai|Jun|Jul|Ago|Set|Out|Nov|Dez)\s+(\d{4})', re.I)
-
-# ⚡ BOLT OPTIMIZATION: Define module-level dictionary to avoid instantiation inside functions
-MONTHS_PT: Dict[str, str] = {
+# --- Constantes e Configuração ---
+MONTHS_PT_DICT: Dict[str, str] = {
     "Jan": "Janeiro", "Fev": "Fevereiro", "Mar": "Março", "Abr": "Abril",
     "Mai": "Maio", "Jun": "Junho", "Jul": "Julho", "Ago": "Agosto",
     "Set": "Setembro", "Out": "Outubro", "Nov": "Novembro", "Dez": "Dezembro",
@@ -46,386 +42,454 @@ MONTHS_PT: Dict[str, str] = {
     "9": "Setembro", "10": "Outubro", "11": "Novembro", "12": "Dezembro"
 }
 
-def clean_srt_content(content: str) -> str:
-    """
-    Remove timestamps and deduplicate lines common in "rollup" subtitles (Youtube).
-    Adapted from lexis-chunk.py.
-    """
-    # Normalize line breaks
-    content = content.replace('\r\n', '\n')
-    
-    # ⚡ BOLT OPTIMIZATION: Use fast native string search (str.find) and slicing instead of splitting into lines
-    blocks = []
-    for block in content.split('\n\n'):
-        arrow_idx = block.find('-->')
-        if arrow_idx != -1:
-            end_idx = block.find('\n', arrow_idx)
-            if end_idx != -1:
-                text_block = block[end_idx + 1:].strip()
-                # Clean HTML tags
-                if '<' in text_block:
-                    text_block = HTML_TAG_PATTERN.sub('', text_block)
-                if text_block:
-                    blocks.append(text_block)
+EXCLUDED_FILES_SET: set[str] = {
+    "historico.txt", "cookies.txt", "requirements.txt", "rules.txt",
+    "LICENSE", "README.md", "rag_processor.py", "rag_processor_local.py"
+}
 
-    # Logical Deduplication
-    cleaned_lines = []
-    if blocks:
-        # Add the first complete block
-        current_text = blocks[0]
-        cleaned_lines.append(current_text)
-        
-        # ⚡ BOLT OPTIMIZATION: Cache prev_lines to avoid recalculating in every iteration
-        prev_lines = [l.strip() for l in current_text.split('\n') if l.strip()]
-
-        for i in range(1, len(blocks)):
-            prev_text = blocks[i-1]
-            curr_text = blocks[i]
-            
-            # Case 1: Current block starts with the previous block (e.g. Prev="A", Curr="A\nB")
-            # We want only "B".
-            if curr_text.startswith(prev_text):
-                new_part = curr_text[len(prev_text):].strip()
-                if new_part:
-                    cleaned_lines.append(new_part)
-                # Recalculate prev_lines for the next iteration
-                prev_lines = [l.strip() for l in curr_text.split('\n') if l.strip()]
-                continue
-                
-            # Case 2: Line by line strategy for "A\nB" -> "B\nC"
-            curr_lines = [l.strip() for l in curr_text.split('\n') if l.strip()]
-            
-            start_idx = 0
-            if prev_lines and curr_lines:
-                if curr_lines[0] == prev_lines[-1]:
-                    start_idx = 1
-                elif len(prev_lines) < len(curr_lines) and curr_lines[:len(prev_lines)] == prev_lines:
-                    start_idx = len(prev_lines)
-
-            # ⚡ BOLT OPTIMIZATION: Use list extend instead of loop append
-            if start_idx < len(curr_lines):
-                cleaned_lines.extend(curr_lines[start_idx:])
-
-            # Cache for the next iteration
-            prev_lines = curr_lines
-
-    return ' '.join(cleaned_lines)
-
-def format_duration(seconds: float) -> str:
-    """Formats duration into human readable string."""
-    if seconds < 60:
-        return f"{seconds:.2f} segundos"
-    
-    minutes = int(seconds // 60)
-    remaining_seconds = int(seconds % 60)
-    
-    if minutes < 60:
-        return f"{minutes}m {remaining_seconds}s"
-        
-    hours = int(minutes // 60)
-    remaining_minutes = int(minutes % 60)
-    return f"{hours}h {remaining_minutes}m {remaining_seconds}s"
-
-# --- Configuration & Logging ---
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[logging.StreamHandler(sys.stdout)]
 )
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
-# Silence Google GenAI library logs (only show warnings/errors)
+# Silencia logs internos da biblioteca do Google para evitar poluição visual no terminal
 logging.getLogger("google.genai").setLevel(logging.WARNING)
 
-# Load Environment Variables
-script_dir = os.path.dirname(os.path.abspath(__file__))
-load_dotenv(os.path.join(script_dir, '.env'))
-load_dotenv(os.path.join(script_dir, 'to-notion', '.env'))
+SCRIPT_DIR_PATH: str = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(SCRIPT_DIR_PATH, '.env'))
+load_dotenv(os.path.join(SCRIPT_DIR_PATH, 'to-notion', '.env'))
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_API_KEY: Optional[str] = os.getenv("GEMINI_API_KEY")
 
 if not GEMINI_API_KEY:
-    logger.error("GEMINI_API_KEY not found in environment variables.")
+    logger.error("API KEY não encontrada! Verifique o arquivo .env.")
     sys.exit(1)
+# --- Funções Auxiliares (Helper Functions) ---
 
-# --- Rules Loading ---
+def _parse_srt_blocks(content_str: str) -> List[str]:
+    """Extrai blocos de texto de conteúdo SRT, removendo tags HTML."""
+    pattern_obj: re.Pattern = re.compile(
+        r'(\d+)\n(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})\n((?:(?!\n\n).)*?)(?=\n\n|$)',
+        re.DOTALL
+    )
+    blocks_list: List[str] = []
+    for match_obj in pattern_obj.finditer(content_str):
+        text_block_str: str = match_obj.group(4).strip()
+        # Remove tags HTML simples como <i> ou <b> que podem vir no .srt
+        text_block_str = re.sub(r'<[^>]*>', '', text_block_str)
+        if text_block_str:
+            blocks_list.append(text_block_str)
+    return blocks_list
 
-def load_rules(rules_path: str = "rules.txt") -> List[Dict[str, Any]]:
-    """Loads terminology rules from a text file (Original -> Replacement)."""
-    absolute_path = os.path.join(script_dir, rules_path)
-    rules = []
-    if not os.path.exists(absolute_path):
-        logger.warning(f"Arquivo de regras não encontrado: {absolute_path}. Usando regras vazias.")
-        return rules
-    
-    try:
-        with open(absolute_path, 'r', encoding='utf-8') as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith('#'):
-                    continue
-                
-                is_regex = False
-                if line.startswith('REGEX:'):
-                    is_regex = True
-                    line = line[6:].strip()
-                
-                if '->' in line:
-                    parts = line.split('->', 1)
-                    original = parts[0].strip()
-                    replacement = parts[1].strip()
-                    rule_dict = {
-                        "original": original,
-                        "replacement": replacement,
-                        "is_regex": is_regex
-                    }
-                    if is_regex:
-                        try:
-                            rule_dict["pattern"] = re.compile(original)
-                        except Exception as e:
-                            logger.error(f"Erro ao compilar regex '{original}': {e}")
-                            continue
-                    rules.append(rule_dict)
-        return rules
-    except Exception as e:
-        logger.error(f"Erro ao carregar {rules_path}: {e}")
+def _handle_simple_repetition(prev_text_str: str, curr_text_str: str) -> Optional[str]:
+    """Retorna a nova parte do texto se for uma repetição simples, caso contrário None."""
+    if curr_text_str.startswith(prev_text_str):
+        return curr_text_str[len(prev_text_str):].strip()
+    return None
+
+def _handle_partial_overlap(prev_text_str: str, curr_text_str: str) -> List[str]:
+    """Identifica sobreposições parciais linha a linha e retorna as linhas únicas."""
+    prev_lines_list: List[str] = [line.strip() for line in prev_text_str.split('\n') if line.strip()]
+    curr_lines_list: List[str] = [line.strip() for line in curr_text_str.split('\n') if line.strip()]
+    start_idx_int: int = 0
+
+    if prev_lines_list and curr_lines_list:
+        if curr_lines_list[0] == prev_lines_list[-1]:
+            start_idx_int = 1
+        elif len(prev_lines_list) < len(curr_lines_list) and curr_lines_list[:len(prev_lines_list)] == prev_lines_list:
+            start_idx_int = len(prev_lines_list)
+
+    return curr_lines_list[start_idx_int:]
+
+def _deduplicate_srt_lines(blocks_list: List[str]) -> List[str]:
+    """Lógica modular para remover repetições em legendas do tipo 'rollup'."""
+    if not blocks_list:
         return []
 
-def enforce_terminology(text: str, rules: List[Dict[str, Any]]) -> str:
-    """Enforces nomenclature rules loaded from configuration."""
-    for rule in rules:
-        if rule["is_regex"]:
-            if "pattern" in rule:
-                try:
-                    text = rule["pattern"].sub(rule["replacement"], text)
-                except Exception as e:
-                    logger.error(f"Erro ao aplicar regex '{rule['original']}': {e}")
-        else:
-            if rule["original"] in text:
-                text = text.replace(rule["original"], rule["replacement"])
-            
-    return text
+    cleaned_lines_list: List[str] = [blocks_list[0]]
+    for i_int in range(1, len(blocks_list)):
+        prev_text_str: str = blocks_list[i_int - 1]
+        curr_text_str: str = blocks_list[i_int]
 
-def extract_metadata_from_filename(filename: str) -> Dict[str, str]:
-    """Extracts title and event date from filename patterns."""
-    if filename.endswith(" Transcrição.txt"):
-        clean_name = filename[:-len(" Transcrição.txt")]
-    elif filename.endswith(".txt"):
-        clean_name = filename[:-len(".txt")]
-    elif filename.endswith(" Transcrição.srt"):
-        clean_name = filename[:-len(" Transcrição.srt")]
-    elif filename.endswith(".srt"):
-        clean_name = filename[:-len(".srt")]
-    else:
-        clean_name = filename
-    clean_name = clean_name.strip()
+        # Caso 1: Repetição simples
+        new_part_str: Optional[str] = _handle_simple_repetition(prev_text_str, curr_text_str)
+        if new_part_str is not None:
+            if new_part_str:
+                cleaned_lines_list.append(new_part_str)
+            continue
+
+        # Caso 2: Sobreposições parciais
+        unique_lines_list: List[str] = _handle_partial_overlap(prev_text_str, curr_text_str)
+        cleaned_lines_list.extend(unique_lines_list)
+
+    return cleaned_lines_list
+
+def clean_srt_content(content_str: str) -> str:
+    """Limpa arquivos .srt removendo tempos e deduplicando conteúdo rollup."""
+    content_str = content_str.replace('\r\n', '\n')
+    blocks_list: List[str] = _parse_srt_blocks(content_str)
+    cleaned_lines_list: List[str] = _deduplicate_srt_lines(blocks_list)
+    return ' '.join(cleaned_lines_list)
+
+def format_duration(seconds_float: float) -> str:
+    """Formata segundos em uma string legível (ex: 1h 2m 3s)."""
+    if seconds_float < 60:
+        return f"{seconds_float:.2f} segundos"
     
-    # Try to find date patterns like "Jan 2026"
-    date_match = DATE_EXTRACT_PATTERN.search(clean_name)
+    minutes_int = int(seconds_float // 60)
+    remaining_seconds_int = int(seconds_float % 60)
     
-    title = clean_name
-    event_date = "N/A"
-    
-    if date_match:
-        month_abbr = date_match.group(1).capitalize()
-        year = date_match.group(2)
-        # Use first 3 letters for mapping
-        key = month_abbr[:3]
-        if key == "Mai": key = "Mai" # Ensure Maio/Mai works
-        full_month = MONTHS_PT.get(key, month_abbr)
-        event_date = f"{full_month} de {year}"
+    if minutes_int < 60:
+        return f"{minutes_int}m {remaining_seconds_int}s"
         
-        if "MasterMind" in clean_name:
-             title = f"MasterMind {full_month} {year}"
-    
-    return {"title": title, "event_date": event_date}
+    hours_int = int(minutes_int // 60)
+    remaining_minutes_int = int(minutes_int % 60)
+    return f"{hours_int}h {remaining_minutes_int}m {remaining_seconds_int}s"
 
-# --- Core Logic ---
+def _parse_rule_line(line_str: str) -> Optional[Dict[str, Any]]:
+    """Analisa uma única linha do arquivo de regras e retorna um dicionário de regra."""
+    line_str = line_str.strip()
+    if not line_str or line_str.startswith('#'):
+        return None
 
-def get_rag_prompt(text: str, filename: str, title: str, current_date: str, event_date: str) -> str:
-    """Returns the structured prompt for Gemini."""
-    return f"""
-    Sua missão é adaptar esta transcrição de vídeo para ser uma fonte RAG (Retrieval-Augmented Generation) de alta qualidade, otimizada para ser lida e processada por agentes de IA (LLMs).
-    
-    ESTRUTURA REQUERIDA:
-    
-    1. YAML Frontmatter (Para facilitar o parser de metadados):
-    ```yaml
-    id: [Crie um ID curto, ex: LIVE-00X]
-    title: "{title}"
-    transcription_date: "{current_date}"
-    event_date: "{event_date}"
-    main_subjects: [Lista de 2-3 temas centrais]
-    target_audience: ["Líderes", "Ekklezia", "Mesa do Conselho"]
-    keywords: [5-7 palavras-chave em formato de lista]
-    ```
-    
-    2. # {title}
-    
-    3. ## Resumo Executivo
-    [Um parágrafo conciso e direto resumindo do que trata o conteúdo e quais as principais teses ou pontos defendidos, ideal para um LLM entender rapidamente o contexto geral]
+    is_regex_bool: bool = line_str.startswith('REGEX:')
+    if is_regex_bool:
+        line_str = line_str[6:].strip()
 
-    4. ## Insights Principais (Key Takeaways)
-    - [Bullet point 1: Principal ensinamento/princípio com detalhes importantes]
-    - [Bullet point 2]
-    - [Bullet point 3]
+    if '->' in line_str:
+        parts_list: List[str] = line_str.split('->', 1)
+        return {
+            "original": parts_list[0].strip(),
+            "replacement": parts_list[1].strip(),
+            "is_regex": is_regex_bool
+        }
+    return None
 
-    5. ## Seções Temáticas
-    [Divida o texto em seções lógicas detalhadas baseadas nas mudanças de assunto]
+def load_rules(rules_path_str: str = "rules.txt") -> List[Dict[str, Any]]:
+    """Carrega regras de terminologia de um arquivo de texto de forma modular."""
+    absolute_path_str: str = os.path.join(SCRIPT_DIR_PATH, rules_path_str)
+    rules_list: List[Dict[str, Any]] = []
 
-    Para cada seção, use a seguinte estrutura:
-    ### [Título da Seção]
-    **Contexto:** [Uma a duas frases resumindo a seção]
+    if not os.path.exists(absolute_path_str):
+        logger.warning(f"Arquivo de regras não encontrado: {absolute_path_str}")
+        return rules_list
 
-    [O conteúdo da transcrição estruturado, limpo de vícios de linguagem, organizado com subtópicos, bullet points e negritos para destacar conceitos-chave. Use parágrafos bem definidos e focados em princípios e estratégias.]
-    
-    REGRAS CRÍTICAS:
-    - Mantenha o conteúdo profundo e sem perda de informações importantes (não resuma demais as seções temáticas).
-    - Remova redundâncias de fala (saudações repetitivas, ruídos, interrupções).
-    - Use formatação Markdown avançada e rigorosa (listas, negrito, itálico) para dar estrutura semântica.
-    - Mantenha os termos "Sete Montes" e "Ekklezia" sempre que o conteúdo se referir a governo ou igreja.
-    
-    ARQUIVO ORIGINAL: {filename}
-    CONTEÚDO:
-    {text}
-    """
-
-def process_with_gemini(client: genai.Client, text: str, filename: str, title: str, current_date: str, event_date: str, max_retries: int = 3) -> str:
-    """Uses Gemini 1.5 Flash to structure the transcript for RAG with retry logic."""
-    prompt = get_rag_prompt(text, filename, title, current_date, event_date)
-    
-    for attempt in range(max_retries):
-        try:
-            response = client.models.generate_content(
-                model='gemini-2.5-flash', contents=prompt
-            )
-            return response.text
-        except Exception as e:
-            if "429" in str(e) or "quota" in str(e).lower():
-                wait_time = (attempt + 1) * 5
-                logger.warning(f"Rate limit atingido para {filename}. Aguardando {wait_time}s (Tentativa {attempt+1}/{max_retries})...")
-                time.sleep(wait_time)
-            else:
-                logger.error(f"Erro na API do Gemini para {filename}: {e}")
-                if attempt == max_retries - 1:
-                    return ""
-                time.sleep(2)
-    return ""
-
-def process_file(client: genai.Client, file_path: str, output_dir: str, rules: Dict[str, Any]):
-    """Processes a single .txt or .srt file and saves the .md result."""
-    filename = os.path.basename(file_path)
-    
-    # Check if output already exists (Idempotency)
-    name, _ = os.path.splitext(filename)
-    output_filename = f"{name}_rag.txt"
-    output_path = os.path.join(output_dir, output_filename)
-    
-    if os.path.exists(output_path):
-        logger.info(f"Pulando: {filename} (Output já existe)")
-        return
-
-    logger.info(f"Iniciando processamento: {filename}")
-    
     try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-            
-        if filename.lower().endswith('.srt'):
-            logger.info(f"Convertendo .srt para texto limpo: {filename}")
-            content = clean_srt_content(content)
+        with open(absolute_path_str, 'r', encoding='utf-8') as f_obj:
+            for line_str in f_obj:
+                rule_dict = _parse_rule_line(line_str)
+                if rule_dict:
+                    rules_list.append(rule_dict)
+        return rules_list
+    except Exception as error_obj:
+        logger.error(f"Erro ao carregar regras: {error_obj}")
+        return []
+
+def enforce_terminology(text_str: str, rules_list: List[Dict[str, Any]]) -> str:
+    """Aplica substituições de termos baseadas nas regras carregadas."""
+    for rule_dict in rules_list:
+        if rule_dict["is_regex"]:
+            try:
+                text_str = re.sub(rule_dict["original"], rule_dict["replacement"], text_str)
+            except Exception as error_obj:
+                logger.error(f"Erro em Regex '{rule_dict['original']}': {error_obj}")
+        else:
+            text_str = text_str.replace(rule_dict["original"], rule_dict["replacement"])
+    return text_str
+
+def _extract_event_date(clean_name_str: str) -> str:
+    """Extrai e formata a data do evento a partir do nome limpo."""
+    date_match_obj: Optional[re.Match] = re.search(
+        r'(Jan|Fev|Mar|Abr|Mai|Jun|Jul|Ago|Set|Out|Nov|Dez)\s+(\d{4})',
+        clean_name_str,
+        re.I
+    )
+    if not date_match_obj:
+        return "N/A"
+
+    month_abbr_str: str = date_match_obj.group(1).capitalize()[:3]
+    year_str: str = date_match_obj.group(2)
+    full_month_str: str = MONTHS_PT_DICT.get(month_abbr_str, month_abbr_str)
+    return f"{full_month_str} de {year_str}"
+
+def _extract_video_id(clean_name_str: str) -> str:
+    """Extrai o ID do vídeo do YouTube a partir do nome limpo."""
+    video_id_match_obj: Optional[re.Match] = re.search(
+        r'(?:\[|[-_])([a-zA-Z0-9_-]{11})(?:\])?$',
+        clean_name_str
+    )
+    return video_id_match_obj.group(1) if video_id_match_obj else "N/A"
+
+def extract_metadata_from_filename(filename_str: str) -> Dict[str, str]:
+    """Extrai título, data e ID do vídeo de forma modular."""
+    clean_name_str: str = (
+        filename_str.replace(" Transcrição.txt", "")
+        .replace(".txt", "")
+        .replace(" Transcrição.srt", "")
+        .replace(".srt", "")
+        .strip()
+    )
+
+    event_date_str: str = _extract_event_date(clean_name_str)
+    video_id_str: str = _extract_video_id(clean_name_str)
+    title_str: str = clean_name_str
+
+    if "MasterMind" in clean_name_str and event_date_str != "N/A":
+        # Extrai mês e ano da string formatada para o título MasterMind
+        title_str = f"MasterMind {event_date_str.replace(' de ', ' ')}"
+
+    return {"title": title_str, "event_date": event_date_str, "video_id": video_id_str}
+
+# --- Lógica de IA (Gemini Integration) ---
+
+
+class GeminiProcessor:
+    """
+    Gerencia as interações com a API do Google Gemini.
+    Responsável por formatar os prompts, enviar o texto e tratar erros/limites de cota.
+    """
+    
+    def __init__(self, api_key_str: str):
+        self.client_obj = genai.Client(api_key=api_key_str)
+        self.model_name_str = "gemini-2.0-flash" # Atualizado para a versão flash mais recente
+
+    def _get_rag_prompt(self, text_str: str, filename_str: str, title_str: str, current_date_str: str, event_date_str: str, video_id_str: str) -> str:
+        """Constrói o prompt detalhado para a IA."""
+        return f"""
+        Sua missão é adaptar esta transcrição de vídeo para ser uma fonte RAG (Retrieval-Augmented Generation) de alta qualidade.
         
-        if not content.strip():
-            logger.warning(f"Arquivo vazio: {filename}")
-            return
+        ESTRUTURA REQUERIDA (Markdown):
+        
+        1. # Fonte RAG: {title_str}
+        
+        2. ## Metadados do Documento
+        - **ID:** {video_id_str if video_id_str != "N/A" else "[Crie um ID curto, ex: LIVE-00X]"}
+        - **Data da Transcrição:** {current_date_str}
+        - **Data do Evento:** {event_date_str}
+        - **Assunto Principal:** [2-3 temas centrais]
+        - **Público-Alvo:** Líderes, Ekklezia, Mesa do Conselho.
+        - **Terminologia Chave:** [5-7 palavras-chave separadas por vírgula]
+        
+        3. ## Seções Temáticas
+        Divida o texto em seções lógicas usando:
+        ### [Título da Seção]
+        **Tags:** #[Tag1] #[Tag2]
+        [Conteúdo estruturado, limpo de vícios de linguagem, focado em princípios e estratégias]
+        
+        REGRAS CRÍTICAS:
+        - Mantenha o conteúdo profundo (não resuma demais).
+        - Remova redundâncias de fala (saudações repetitivas, ruídos).
+        - Use Markdown rigoroso.
+        - Mantenha os termos "Sete Montes" e "Ekklezia" sempre que o conteúdo se referir a governo ou igreja.
+        
+        ARQUIVO ORIGINAL: {filename_str}
+        CONTEÚDO:
+        {text_str}
+        """
 
-        # 0. Prep Metadata
-        meta = extract_metadata_from_filename(filename)
-        now = datetime.now()
-        current_date_str = f"{now.day} de {MONTHS_PT[str(now.month)]} de {now.year}"
+    def _prepare_processing_context(self, filename_str: str, meta_dict: Dict[str, str]) -> Dict[str, str]:
+        """Prepara as strings de data e prompt para o processamento."""
+        now_obj = datetime.now()
+        current_date_str: str = f"{now_obj.day} de {MONTHS_PT_DICT[str(now_obj.month)]} de {now_obj.year}"
+        return {
+            "current_date": current_date_str,
+            "event_date": meta_dict['event_date'],
+            "title": meta_dict['title'],
+            "video_id": meta_dict['video_id']
+        }
 
-        # 1. Gemini Processing
-        optimized_text = process_with_gemini(
-            client, content, filename, 
-            meta['title'], current_date_str, meta['event_date']
+    def _call_gemini_api(self, prompt_str: str, filename_str: str, max_retries_int: int) -> str:
+        """Realiza a chamada à API Gemini com lógica de retentativa para limites de cota."""
+        for attempt_int in range(max_retries_int):
+            try:
+                response_obj = self.client_obj.models.generate_content(
+                    model=self.model_name_str,
+                    contents=prompt_str
+                )
+                return response_obj.text
+            except Exception as error_obj:
+                error_msg_str: str = str(error_obj)
+                if "429" in error_msg_str or "quota" in error_msg_str.lower():
+                    wait_time_int: int = (attempt_int + 1) * 5
+                    logger.warning(f"Limite de API atingido para {filename_str}. Esperando {wait_time_int}s...")
+                    time.sleep(wait_time_int)
+                else:
+                    logger.error(f"Erro na API Gemini para {filename_str}: {error_obj}")
+                    if attempt_int == max_retries_int - 1:
+                        return ""
+                    time.sleep(2)
+        return ""
+
+    def process(self, text_str: str, filename_str: str, meta_dict: Dict[str, str], max_retries_int: int = 3) -> str:
+        """Orquestra o processamento do texto via Gemini de forma modular."""
+        ctx_dict = self._prepare_processing_context(filename_str, meta_dict)
+        
+        prompt_str: str = self._get_rag_prompt(
+            text_str, filename_str, ctx_dict['title'], 
+            ctx_dict['current_date'], ctx_dict['event_date'], ctx_dict['video_id']
         )
         
-        if not optimized_text:
-            logger.error(f"Falha ao gerar conteúdo para {filename}")
-            return
-            
-        # 2. Terminology Enforcement (Dynamic Rules)
-        final_text = enforce_terminology(optimized_text, rules)
-        
-        # 3. Save Markdown
-        with open(output_path, 'w', encoding='utf-8') as f:
-            f.write(final_text)
-            f.write("\n\n---\n\n## Transcrição Completa Original\n\n")
-            f.write(content)
-            
-        # logger.info(f"Sucesso: {output_filename}")
-        
-    except Exception as e:
-        logger.error(f"Erro ao processar arquivo {filename}: {e}")
+        return self._call_gemini_api(prompt_str, filename_str, max_retries_int)
 
-# --- Main ---
-
-def main():
-    parser = argparse.ArgumentParser(description="Processador de Transcrições para RAG.")
-    parser.add_argument("--dir", default=".", help="Diretório contendo os arquivos .txt ou .srt")
-    parser.add_argument("--output", help="Diretório de saída (padrão: mesmo da entrada)")
-    parser.add_argument("--workers", type=int, default=3, help="Threads simultâneas (padrão: 3)")
-    parser.add_argument("--rules", default="rules.txt", help="Arquivo de regras (padrão: rules.txt)")
-    
-    args = parser.parse_args()
-    
-    if not os.path.exists(args.dir):
-        logger.error(f"Diretório não encontrado: {args.dir}")
-        return
-        
-    output_dir = args.output if args.output else args.dir
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-        
-    # Filter out known config/system files
-    excluded_files = {"historico.txt","cookies.txt", "requirements.txt", "rules.txt", "LICENSE", "README.md"}
-    files = [
-        f for f in os.listdir(args.dir) 
+def get_files_to_process(input_dir_path: str, specific_files_list: Optional[List[str]] = None) -> List[str]:
+    """Filtra os arquivos no diretório com base na extensão e na lista de exclusão."""
+    all_files_list: List[str] = [
+        f for f in os.listdir(input_dir_path)
         if (f.endswith('.txt') or f.endswith('.srt'))
-        and "_rag" not in f 
-        and f not in excluded_files
+        and "_rag" not in f
+        and f not in EXCLUDED_FILES_SET
         and not f.startswith(".")
     ]
     
-    if not files:
-        logger.info("Nenhuma transcrição encontrada para processar.")
+    if specific_files_list:
+        expanded_patterns_set = set()
+        for pattern_str in specific_files_list:
+            glob_path_str = os.path.join(input_dir_path, pattern_str)
+            matches_list = glob.glob(glob_path_str)
+            if matches_list:
+                 for match_str in matches_list:
+                      expanded_patterns_set.add(os.path.basename(match_str))
+            else:
+                 expanded_patterns_set.add(pattern_str)
+        return [f for f in all_files_list if f in expanded_patterns_set]
+        
+    return all_files_list
+
+def _read_file_content(file_path_str: str) -> str:
+    """Lê e realiza limpeza inicial do conteúdo do arquivo."""
+    filename_str: str = os.path.basename(file_path_str)
+    with open(file_path_str, 'r', encoding='utf-8') as f_obj:
+        content_str: str = f_obj.read()
+
+    if filename_str.lower().endswith('.srt'):
+        logger.info(f"Limpando SRT: {filename_str}")
+        content_str = clean_srt_content(content_str)
+    return content_str
+
+def _get_output_path(file_path_str: str, output_dir_path: str) -> str:
+    """Gera o caminho do arquivo de saída."""
+    filename_str: str = os.path.basename(file_path_str)
+    name_str, _ = os.path.splitext(filename_str)
+    return os.path.join(output_dir_path, f"{name_str}_rag.txt")
+
+def _save_rag_result(output_path_str: str, final_text_str: str, original_content_str: str) -> None:
+    """Salva o resultado final e a transcrição original."""
+    with open(output_path_str, 'w', encoding='utf-8') as f_obj:
+        f_obj.write(final_text_str)
+        f_obj.write("\n\n---\n\n## Transcrição Completa Original\n\n")
+        f_obj.write(original_content_str)
+
+def process_single_file(
+    file_path_str: str,
+    output_dir_path: str,
+    rules_list: List[Dict[str, Any]],
+    processor_obj: GeminiProcessor
+) -> None:
+    """Processa um único arquivo (.txt ou .srt) de forma modular."""
+    filename_str: str = os.path.basename(file_path_str)
+    output_path_str: str = _get_output_path(file_path_str, output_dir_path)
+
+    # Idempotência: pula se já processado
+    if os.path.exists(output_path_str):
+        logger.info(f"Pulando: {filename_str} (Já processado)")
         return
-        
-    logger.info(f"Encontrados {len(files)} arquivos. Iniciando processamento paralelo ({args.workers} workers)...")
-    
-    # Load terminology rules once
-    rules = load_rules(args.rules)
-    
-    # Initialize shared Gemini Client
-    client = genai.Client(api_key=GEMINI_API_KEY)
-    
-    start_time = time.time()
-    
-    total_files = len(files)
-    with ThreadPoolExecutor(max_workers=args.workers) as executor:
-        futures = {executor.submit(process_file, client, os.path.join(args.dir, f), output_dir, rules): f for f in files}
-        
-        for i, future in enumerate(as_completed(futures), 1):
-            filename = futures[future]
+
+    try:
+        content_str: str = _read_file_content(file_path_str)
+        if not content_str.strip():
+            logger.warning(f"Arquivo vazio: {filename_str}")
+            return
+
+        meta_dict: Dict[str, str] = extract_metadata_from_filename(filename_str)
+
+        # Processamento com IA
+        optimized_text_str: str = processor_obj.process(content_str, filename_str, meta_dict)
+        if not optimized_text_str:
+            logger.error(f"IA falhou em {filename_str}")
+            return
+
+        # Aplica regras de Terminologia e salva
+        final_text_str: str = enforce_terminology(optimized_text_str, rules_list)
+        _save_rag_result(output_path_str, final_text_str, content_str)
+
+        logger.info(f"Salvo: {output_path_str}")
+
+    except Exception as error_obj:
+        logger.error(f"Erro ao processar {filename_str}: {error_obj}")
+
+# --- Ponto de Entrada (Main) ---
+
+def _parse_arguments() -> argparse.Namespace:
+    """Configura e analisa os argumentos de linha de comando."""
+    parser_obj = argparse.ArgumentParser(description="Processador de Transcrições para RAG (Gemini).")
+    parser_obj.add_argument("--dir", default=".", help="Diretório de entrada")
+    parser_obj.add_argument("--output", help="Diretório de saída")
+    parser_obj.add_argument("--workers", type=int, default=3, help="Número de threads simultâneas")
+    parser_obj.add_argument("--rules", default="rules.txt", help="Arquivo de regras")
+    parser_obj.add_argument("--files", nargs='+', help="Filtros de arquivos específicos")
+    return parser_obj.parse_args()
+
+def _orchestrate_parallel_processing(
+    input_dir_path: str,
+    output_dir_path: str,
+    files_list: List[str],
+    workers_int: int,
+    rules_list: List[Dict[str, Any]],
+    processor_obj: GeminiProcessor
+) -> None:
+    """Gerencia o pool de threads para processamento paralelo."""
+    total_files_int: int = len(files_list)
+    with ThreadPoolExecutor(max_workers=workers_int) as executor:
+        futures_dict: Dict[Any, str] = {
+            executor.submit(
+                process_single_file,
+                os.path.join(input_dir_path, f),
+                output_dir_path,
+                rules_list,
+                processor_obj
+            ): f for f in files_list
+        }
+
+        for i_int, future_obj in enumerate(as_completed(futures_dict), 1):
+            filename_str: str = futures_dict[future_obj]
             try:
-                future.result()
-                logger.info(f"[{i}/{total_files}] Concluído: {filename}")
-            except Exception as e:
-                logger.error(f"[{i}/{total_files}] Falha no worker para {filename}: {e}")
-                
-    end_time = time.time()
-    elapsed = end_time - start_time
-    logger.info(f"Processamento de lote concluído em {format_duration(elapsed)}.")
+                future_obj.result()
+                logger.info(f"[{i_int}/{total_files_int}] Concluído: {filename_str}")
+            except Exception as error_obj:
+                logger.error(f"[{i_int}/{total_files_int}] Falha crítica para {filename_str}: {error_obj}")
+
+def main() -> None:
+    """Ponto de entrada coordenador do script."""
+    args_obj: argparse.Namespace = _parse_arguments()
+
+    input_dir_path: str = args_obj.dir
+    if not os.path.exists(input_dir_path):
+        logger.error(f"Diretório não encontrado: {input_dir_path}")
+        return
+
+    output_dir_path: str = args_obj.output if args_obj.output else input_dir_path
+    os.makedirs(output_dir_path, exist_ok=True)
+
+    files_to_process_list: List[str] = get_files_to_process(input_dir_path, args_obj.files)
+    if not files_to_process_list:
+        logger.info("Nenhuma transcrição nova encontrada.")
+        return
+
+    logger.info(f"Encontrados {len(files_to_process_list)} arquivos. Processando com {args_obj.workers} workers...")
+
+    rules_list: List[Dict[str, Any]] = load_rules(args_obj.rules)
+    processor_obj: GeminiProcessor = GeminiProcessor(GEMINI_API_KEY)
+
+    start_time_float: float = time.time()
+    _orchestrate_parallel_processing(
+        input_dir_path, output_dir_path, files_to_process_list,
+        args_obj.workers, rules_list, processor_obj
+    )
+
+    elapsed_float: float = time.time() - start_time_float
+    logger.info(f"Lote concluído em {format_duration(elapsed_float)}.")
 
 if __name__ == "__main__":
     main()

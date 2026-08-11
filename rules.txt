@@ -6,7 +6,7 @@ Sete Montanhas -> Sete Montes
 Ecclesia -> Ekklezia
 Eclesia -> Ekklezia
 Eklezia -> Ekklezia
-
+Jandi -> Jandir
 
 # Exemplo de Regex (prefixar com REGEX:)
 # REGEX: (?i)exemplo -> Substituição

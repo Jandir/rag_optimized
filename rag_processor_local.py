@@ -51,114 +51,101 @@ load_dotenv(os.path.join(SCRIPT_DIR_PATH, '.env'))
 
 # --- Helper Functions ---
 
-# ⚡ BOLT OPTIMIZATION: Pre-compile regexes at module level to avoid repeated compilation in loops
-SRT_BLOCK_PATTERN = re.compile(r'\d+\n\d{2}:\d{2}:\d{2},\d{3} --> \d{2}:\d{2}:\d{2},\d{3}\n(.*?)(?=\n\n|$)', re.DOTALL)
-HTML_TAG_PATTERN = re.compile(r'<[^>]*>')
-DATE_EXTRACT_PATTERN = re.compile(r'(Jan|Fev|Mar|Abr|Mai|Jun|Jul|Ago|Set|Out|Nov|Dez)\s+(\d{4})', re.I)
-VIDEO_ID_PATTERN = re.compile(r'(?:\[|[-_])([a-zA-Z0-9_-]{11})(?:\])?$')
-FILLER_WORDS_PATTERN = re.compile(r'\bne\b|\bentão\b|\btipo\b|\bsabe\b|\bpra\b|\btá\b|\bgente\b', re.IGNORECASE)
-
 def _parse_srt_blocks(content_str: str) -> List[str]:
     """Extracts text blocks from SRT content, removing tags."""
-    # ⚡ BOLT OPTIMIZATION: Use fast native string search (str.find) and slicing instead of splitting into lines
+    pattern_obj: re.Pattern = re.compile(
+        r'(\d+)\n(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})\n((?:(?!\n\n).)*?)(?=\n\n|$)',
+        re.DOTALL
+    )
     blocks_list: List[str] = []
-    for block_str in content_str.split('\n\n'):
-        arrow_idx_int: int = block_str.find('-->')
-        if arrow_idx_int != -1:
-            end_idx_int: int = block_str.find('\n', arrow_idx_int)
-            if end_idx_int != -1:
-                text_block_str: str = block_str[end_idx_int + 1:].strip()
-                if '<' in text_block_str:
-                    text_block_str = HTML_TAG_PATTERN.sub('', text_block_str)
-                if text_block_str:
-                    blocks_list.append(text_block_str)
+    for match_obj in pattern_obj.finditer(content_str):
+        text_block_str: str = match_obj.group(4).strip()
+        text_block_str = re.sub(r'<[^>]*>', '', text_block_str)
+        if text_block_str:
+            blocks_list.append(text_block_str)
     return blocks_list
 
+def _handle_simple_repetition(prev_text_str: str, curr_text_str: str) -> Optional[str]:
+    """Retorna a nova parte do texto se for uma repetição simples, caso contrário None."""
+    if curr_text_str.startswith(prev_text_str):
+        return curr_text_str[len(prev_text_str):].strip()
+    return None
+
+def _handle_partial_overlap(prev_text_str: str, curr_text_str: str) -> List[str]:
+    """Identifica sobreposições parciais linha a linha e retorna as linhas únicas."""
+    prev_lines_list: List[str] = [line.strip() for line in prev_text_str.split('\n') if line.strip()]
+    curr_lines_list: List[str] = [line.strip() for line in curr_text_str.split('\n') if line.strip()]
+    start_idx_int: int = 0
+
+    if prev_lines_list and curr_lines_list:
+        if curr_lines_list[0] == prev_lines_list[-1]:
+            start_idx_int = 1
+        elif len(prev_lines_list) < len(curr_lines_list) and curr_lines_list[:len(prev_lines_list)] == prev_lines_list:
+            start_idx_int = len(prev_lines_list)
+
+    return curr_lines_list[start_idx_int:]
+
 def _deduplicate_srt_lines(blocks_list: List[str]) -> List[str]:
-    """Handles the complex deduplication logic for rollup subtitles."""
-    cleaned_lines_list: List[str] = []
+    """Lógica modular para remover repetições em legendas do tipo 'rollup'."""
     if not blocks_list:
-        return cleaned_lines_list
+        return []
 
-    cleaned_lines_list.append(blocks_list[0])
-
-    # ⚡ BOLT OPTIMIZATION: Cache prev_lines_list to avoid recalculating in every iteration
-    prev_lines_list: List[str] = [l.strip() for l in blocks_list[0].split('\n') if l.strip()]
-
+    cleaned_lines_list: List[str] = [blocks_list[0]]
     for i_int in range(1, len(blocks_list)):
         prev_text_str: str = blocks_list[i_int - 1]
         curr_text_str: str = blocks_list[i_int]
 
-        if curr_text_str.startswith(prev_text_str):
-            new_part_str: str = curr_text_str[len(prev_text_str):].strip()
+        new_part_str: Optional[str] = _handle_simple_repetition(prev_text_str, curr_text_str)
+        if new_part_str is not None:
             if new_part_str:
                 cleaned_lines_list.append(new_part_str)
-            # Recalculate prev_lines_list for the next iteration
-            prev_lines_list = [l.strip() for l in curr_text_str.split('\n') if l.strip()]
             continue
 
-        curr_lines_list: List[str] = [l.strip() for l in curr_text_str.split('\n') if l.strip()]
-        start_idx_int: int = 0
-
-        if prev_lines_list and curr_lines_list:
-            if curr_lines_list[0] == prev_lines_list[-1]:
-                start_idx_int = 1
-            elif len(prev_lines_list) < len(curr_lines_list) and curr_lines_list[:len(prev_lines_list)] == prev_lines_list:
-                start_idx_int = len(prev_lines_list)
-
-        # ⚡ BOLT OPTIMIZATION: Use list extend instead of loop append
-        if start_idx_int < len(curr_lines_list):
-            cleaned_lines_list.extend(curr_lines_list[start_idx_int:])
-
-        # Cache for the next iteration
-        prev_lines_list = curr_lines_list
+        unique_lines_list: List[str] = _handle_partial_overlap(prev_text_str, curr_text_str)
+        cleaned_lines_list.extend(unique_lines_list)
 
     return cleaned_lines_list
 
 def clean_srt_content(content_str: str) -> str:
-    """
-    Remove timestamps e limpa a repetição de linhas comum em legendas do tipo 'rollup'.
-    Muitas legendas geradas automaticamente repetem o texto anterior à medida que novas palavras aparecem.
-    Esta função garante que tenhamos um texto corrido e limpo.
-    """
+    """Limpa arquivos .srt removendo tempos e deduplicando conteúdo rollup."""
     content_str = content_str.replace('\r\n', '\n')
-    # Primeiro, extraímos apenas os blocos de texto, ignorando os números e tempos.
     blocks_list: List[str] = _parse_srt_blocks(content_str)
-    # Depois, comparamos os blocos para remover o que está repetido.
     cleaned_lines_list: List[str] = _deduplicate_srt_lines(blocks_list)
     return ' '.join(cleaned_lines_list)
 
+def _parse_rule_line(line_str: str) -> Optional[Dict[str, Any]]:
+    """Analisa uma única linha do arquivo de regras."""
+    line_str = line_str.strip()
+    if not line_str or line_str.startswith('#'):
+        return None
+
+    is_regex_bool: bool = line_str.startswith('REGEX:')
+    if is_regex_bool:
+        line_str = line_str[6:].strip()
+
+    if '->' in line_str:
+        parts_list: List[str] = line_str.split('->', 1)
+        return {
+            "original": parts_list[0].strip(),
+            "replacement": parts_list[1].strip(),
+            "is_regex": is_regex_bool
+        }
+    return None
+
 def load_rules(rules_path_str: str = "rules.txt") -> List[Dict[str, Any]]:
-    """Loads terminology rules from a text file."""
+    """Carrega regras de terminologia de forma modular."""
     absolute_path_str: str = os.path.join(SCRIPT_DIR_PATH, rules_path_str)
     rules_list: List[Dict[str, Any]] = []
+
     if not os.path.exists(absolute_path_str):
         logger.warning(f"Rules file not found: {absolute_path_str}")
         return rules_list
+
     try:
         with open(absolute_path_str, 'r', encoding='utf-8') as f_obj:
             for line_str in f_obj:
-                line_str = line_str.strip()
-                if not line_str or line_str.startswith('#'):
-                    continue
-                is_regex_bool: bool = line_str.startswith('REGEX:')
-                if is_regex_bool:
-                    line_str = line_str[6:].strip()
-                if '->' in line_str:
-                    parts_list: List[str] = line_str.split('->', 1)
-                    original_str: str = parts_list[0].strip()
-                    replacement_str: str = parts_list[1].strip()
-                    rule_dict: Dict[str, Any] = {
-                        "original": original_str,
-                        "replacement": replacement_str,
-                        "is_regex": is_regex_bool
-                    }
-                    if is_regex_bool:
-                        try:
-                            rule_dict["pattern_obj"] = re.compile(original_str)
-                        except Exception as error_obj:
-                            logger.error(f"Error compiling regex '{original_str}': {error_obj}")
-                            continue
+                rule_dict = _parse_rule_line(line_str)
+                if rule_dict:
                     rules_list.append(rule_dict)
         return rules_list
     except Exception as error_obj:
@@ -166,58 +153,54 @@ def load_rules(rules_path_str: str = "rules.txt") -> List[Dict[str, Any]]:
         return []
 
 def enforce_terminology(text_str: str, rules_list: List[Dict[str, Any]]) -> str:
-    """
-    Garante que termos específicos sejam escritos corretamente.
-    Lê as regras do arquivo 'rules.txt' e faz substituições (simples ou via Regex).
-    Isso é vital para manter a consistência de termos como 'Ekklezia' ou 'Sete Montes'.
-    """
+    """Aplica substituições de termos baseadas nas regras."""
     for rule_dict in rules_list:
         if rule_dict["is_regex"]:
-            if "pattern_obj" in rule_dict:
-                try:
-                    text_str = rule_dict["pattern_obj"].sub(rule_dict["replacement"], text_str)
-                except Exception as error_obj:
-                    logger.error(f"Error applying regex '{rule_dict['original']}': {error_obj}")
+            text_str = re.sub(rule_dict["original"], rule_dict["replacement"], text_str)
         else:
-            if rule_dict["original"] in text_str:
-                text_str = text_str.replace(rule_dict["original"], rule_dict["replacement"])
+            text_str = text_str.replace(rule_dict["original"], rule_dict["replacement"])
     return text_str
 
-def extract_metadata_from_filename(filename_str: str) -> Dict[str, str]:
-    """Extracts title, date and video ID from the filename."""
-    if filename_str.endswith(" Transcrição.txt"):
-        clean_name_str: str = filename_str[:-len(" Transcrição.txt")]
-    elif filename_str.endswith(".txt"):
-        clean_name_str = filename_str[:-len(".txt")]
-    elif filename_str.endswith(" Transcrição.srt"):
-        clean_name_str = filename_str[:-len(" Transcrição.srt")]
-    elif filename_str.endswith(".srt"):
-        clean_name_str = filename_str[:-len(".srt")]
-    else:
-        clean_name_str = filename_str
-    clean_name_str = clean_name_str.strip()
+def _extract_event_date(clean_name_str: str) -> str:
+    """Extrai e formata a data do evento."""
+    date_match_obj: Optional[re.Match] = re.search(
+        r'(Jan|Fev|Mar|Abr|Mai|Jun|Jul|Ago|Set|Out|Nov|Dez)\s+(\d{4})',
+        clean_name_str,
+        re.I
+    )
+    if not date_match_obj:
+        return "N/A"
 
-    date_match_obj: Optional[re.Match] = DATE_EXTRACT_PATTERN.search(clean_name_str)
-    
+    month_abbr_str: str = date_match_obj.group(1).capitalize()[:3]
+    year_str: str = date_match_obj.group(2)
+    full_month_str: str = MONTHS_PT_DICT.get(month_abbr_str, month_abbr_str)
+    return f"{full_month_str} de {year_str}"
+
+def _extract_video_id(clean_name_str: str) -> str:
+    """Extrai o ID do vídeo do YouTube."""
+    video_id_match_obj: Optional[re.Match] = re.search(
+        r'(?:\[|[-_])([a-zA-Z0-9_-]{11})(?:\])?$',
+        clean_name_str
+    )
+    return video_id_match_obj.group(1) if video_id_match_obj else "N/A"
+
+def extract_metadata_from_filename(filename_str: str) -> Dict[str, str]:
+    """Extrai título, data e ID do vídeo de forma modular."""
+    clean_name_str: str = (
+        filename_str.replace(" Transcrição.txt", "")
+        .replace(".txt", "")
+        .replace(" Transcrição.srt", "")
+        .replace(".srt", "")
+        .strip()
+    )
+    event_date_str: str = _extract_event_date(clean_name_str)
+    video_id_str: str = _extract_video_id(clean_name_str)
     title_str: str = clean_name_str
-    event_date_str: str = "N/A"
     
-    if date_match_obj:
-        month_abbr_str: str = date_match_obj.group(1).capitalize()[:3]
-        year_str: str = date_match_obj.group(2)
-        full_month_str: str = MONTHS_PT_DICT.get(month_abbr_str, month_abbr_str)
-        event_date_str = f"{full_month_str} de {year_str}"
-        if "MasterMind" in clean_name_str:
-            title_str = f"MasterMind {full_month_str} {year_str}"
+    if "MasterMind" in clean_name_str and event_date_str != "N/A":
+        title_str = f"MasterMind {event_date_str.replace(' de ', ' ')}"
             
-    video_id_match_obj: Optional[re.Match] = VIDEO_ID_PATTERN.search(clean_name_str)
-    video_id_str: str = video_id_match_obj.group(1) if video_id_match_obj else "N/A"
-    
-    return {
-        "title": title_str,
-        "event_date": event_date_str,
-        "video_id": video_id_str
-    }
+    return {"title": title_str, "event_date": event_date_str, "video_id": video_id_str}
 
 # --- Heuristic Engine ---
 
@@ -230,25 +213,19 @@ class HeuristicProcessor:
     def __init__(self):
         # Carregamos o modelo de Português do spaCy (NER e Sentenças)
         logger.info("Loading spaCy model...")
-        # ⚡ BOLT OPTIMIZATION: Disable unused spaCy pipeline components and add lightweight sentencizer to significantly reduce initialization and processing time
-        self.nlp_obj = spacy.load("pt_core_news_sm", disable=["tagger", "morphologizer", "lemmatizer", "attribute_ruler", "parser"])
-        self.nlp_obj.add_pipe("sentencizer")
+        self.nlp_obj = spacy.load("pt_core_news_sm")
         # Configuramos o extrator de palavras-chave YAKE
         self.kw_extractor_obj = yake.KeywordExtractor(lan="pt", n=3, dedupLim=0.9, top=10)
-        # ⚡ BOLT OPTIMIZATION: Initialize section keyword extractor once to prevent repetitive slow instantiations in loops
-        self.sec_kw_extractor_obj = yake.KeywordExtractor(lan="pt", n=2, top=3)
         # O TextTiling ajuda a dividir o texto em seções baseadas em mudança de tópico
         self.tt_tokenizer_obj = TextTilingTokenizer()
 
-        # Compila a regex de filler words uma vez na inicialização
+    def clean_filler_words(self, text_str: str) -> str:
+        """Removes common Portuguese filler words via regex."""
         fillers_list: List[str] = [
             r'\bne\b', r'\bentão\b', r'\btipo\b', r'\bsabe\b', r'\bpra\b', r'\btá\b', r'\bgente\b'
         ]
-        self.fillers_pattern_obj: re.Pattern = re.compile('|'.join(fillers_list), re.IGNORECASE)
-
-    def clean_filler_words(self, text_str: str) -> str:
-        """Removes common Portuguese filler words via regex."""
-        return self.fillers_pattern_obj.sub('', text_str).replace('  ', ' ').strip()
+        pattern_obj: re.Pattern = re.compile('|'.join(fillers_list), re.IGNORECASE)
+        return pattern_obj.sub('', text_str).replace('  ', ' ').strip()
 
     def _extract_keywords(self, text_str: str) -> List[str]:
         """Extracts top keywords using YAKE."""
@@ -274,44 +251,39 @@ class HeuristicProcessor:
         except Exception:
             return [segmented_text_str]
 
-    def _generate_markdown_output(self, meta_dict: Dict[str, str], entities_list: List[str], keywords_list: List[str], sections_list: List[str]) -> str:
-        """Formats the final RAG-ready markdown with YAML frontmatter."""
+    def _generate_markdown_header(self, meta_dict: Dict[str, str], entities_list: List[str], keywords_list: List[str]) -> str:
+        """Gera o cabeçalho e metadados do documento Markdown."""
         now_obj: datetime = datetime.now()
         current_date_str: str = f"{now_obj.day} de {MONTHS_PT_DICT[str(now_obj.month)]} de {now_obj.year}"
 
-        # ⚡ BOLT OPTIMIZATION: Use list append and join instead of string concatenation in loops
-        parts_list: List[str] = []
-        parts_list.append("---\n")
-        parts_list.append(f"id: \"{meta_dict['video_id']}\"\n")
-        parts_list.append(f"title: \"{meta_dict['title']}\"\n")
-        parts_list.append(f"transcription_date: \"{current_date_str}\"\n")
-        parts_list.append(f"event_date: \"{meta_dict['event_date']}\"\n")
+        header_str: str = f"# Fonte RAG: {meta_dict['title']}\n\n"
+        header_str += "## Metadados do Documento\n"
+        header_str += f"- **ID:** {meta_dict['video_id']}\n"
+        header_str += f"- **Data da Transcrição:** {current_date_str}\n"
+        header_str += f"- **Data do Evento:** {meta_dict['event_date']}\n"
+        header_str += f"- **Assunto Principal:** {', '.join(entities_list) if entities_list else 'Conteúdo Geral'}\n"
+        header_str += "- **Público-Alvo:** Líderes, Ekklezia, Mesa do Conselho.\n"
+        header_str += f"- **Terminologia Chave:** {', '.join(keywords_list)}\n\n"
+        return header_str
 
-        main_subjects = ', '.join([f'"{ent}"' for ent in entities_list]) if entities_list else '"Conteúdo Geral"'
-        parts_list.append(f"main_subjects: [{main_subjects}]\n")
-        parts_list.append("target_audience: [\"Líderes\", \"Ekklezia\", \"Mesa do Conselho\"]\n")
-
-        kws = ', '.join([f'"{kw}"' for kw in keywords_list])
-        parts_list.append(f"keywords: [{kws}]\n")
-        parts_list.append("---\n\n")
-
-        parts_list.append(f"# {meta_dict['title']}\n\n")
-
-        if entities_list:
-            parts_list.append("## Escopo de Entidades (Contexto Automático)\n")
-            parts_list.append(f"Este documento aborda principalmente: **{', '.join(entities_list)}**.\n\n")
+    def _format_section(self, i_int: int, section_str: str) -> str:
+        """Formata uma única seção com tags e título heurístico."""
+        extractor_obj: yake.KeywordExtractor = yake.KeywordExtractor(lan="pt", n=2, top=3)
+        sec_keywords_list: List[str] = [kw[0] for kw in extractor_obj.extract_keywords(section_str)]
+        sec_title_str: str = f"Seção {i_int}: " + (sec_keywords_list[0].capitalize() if sec_keywords_list else "Desenvolvimento")
         
-        parts_list.append("## Seções Temáticas\n")
-        for i_int, section_str in enumerate(sections_list, 1):
-            # ⚡ BOLT OPTIMIZATION: Reuse self.sec_kw_extractor_obj instead of re-instantiating YAKE per section
-            sec_keywords_list: List[str] = [kw[0] for kw in self.sec_kw_extractor_obj.extract_keywords(section_str)]
-            sec_title_str: str = f"Seção {i_int}: " + (sec_keywords_list[0].capitalize() if sec_keywords_list else "Desenvolvimento")
-            
-            parts_list.append(f"### {sec_title_str}\n")
-            parts_list.append(f"**Tags:** {' '.join(['#'+kw.replace(' ', '') for kw in sec_keywords_list])}\n\n")
-            parts_list.append(f"{section_str.strip()}\n\n")
+        output_str: str = f"### {sec_title_str}\n"
+        output_str += f"**Tags:** {' '.join(['#'+kw.replace(' ', '') for kw in sec_keywords_list])}\n\n"
+        output_str += f"{section_str.strip()}\n\n"
+        return output_str
 
-        return ''.join(parts_list)
+    def _generate_markdown_output(self, meta_dict: Dict[str, str], entities_list: List[str], keywords_list: List[str], sections_list: List[str]) -> str:
+        """Monta o documento Markdown final unificando cabeçalho e seções."""
+        output_str: str = self._generate_markdown_header(meta_dict, entities_list, keywords_list)
+        output_str += "## Seções Temáticas\n"
+        for i_int, section_str in enumerate(sections_list, 1):
+            output_str += self._format_section(i_int, section_str)
+        return output_str
 
     def process(self, text_str: str, meta_dict: Dict[str, str]) -> str:
         """
@@ -345,6 +317,23 @@ def get_files_to_process(input_dir_path: str, specific_files_list: Optional[List
         return [f for f in all_files_list if any(p in f for p in specific_files_list)]
     return all_files_list
 
+def _read_file_content(file_path_str: str) -> str:
+    """Lê e realiza limpeza inicial do conteúdo do arquivo."""
+    filename_str: str = os.path.basename(file_path_str)
+    with open(file_path_str, 'r', encoding='utf-8') as f_obj:
+        content_str: str = f_obj.read()
+
+    if filename_str.lower().endswith('.srt'):
+        content_str = clean_srt_content(content_str)
+    return content_str
+
+def _save_rag_result(output_path_str: str, final_text_str: str, original_content_str: str) -> None:
+    """Salva o resultado final e a transcrição original."""
+    with open(output_path_str, 'w', encoding='utf-8') as f_obj:
+        f_obj.write(final_text_str)
+        f_obj.write("\n\n---\n\n## Transcrição Completa Original\n\n")
+        f_obj.write(original_content_str)
+
 def process_single_file(
     filename_str: str,
     input_dir_path: str,
@@ -352,45 +341,37 @@ def process_single_file(
     rules_list: List[Dict[str, Any]],
     processor_obj: HeuristicProcessor
 ) -> None:
-    """Processes a single transcript file and saves the RAG version."""
+    """Processa um único arquivo de transcrição e salva a versão RAG."""
     try:
         file_path_str: str = os.path.join(input_dir_path, filename_str)
+        name_str, _ = os.path.splitext(filename_str)
+        output_path_str: str = os.path.join(output_dir_path, f"{name_str}_rag.txt")
+
         logger.info(f"Processing: {filename_str}")
         
-        with open(file_path_str, 'r', encoding='utf-8') as f_obj:
-            content_str: str = f_obj.read()
-        
-        if filename_str.lower().endswith('.srt'):
-            content_str = clean_srt_content(content_str)
-        
+        content_str: str = _read_file_content(file_path_str)
         meta_dict: Dict[str, str] = extract_metadata_from_filename(filename_str)
+        
         processed_text_str: str = processor_obj.process(content_str, meta_dict)
         final_text_str: str = enforce_terminology(processed_text_str, rules_list)
         
-        name_str: str
-        name_str, _ = os.path.splitext(filename_str)
-        output_path_str: str = os.path.join(output_dir_path, f"{name_str}_rag.txt")
-        
-        with open(output_path_str, 'w', encoding='utf-8') as f_obj:
-            f_obj.write(final_text_str)
-            f_obj.write("\n\n---\n\n## Transcrição Completa Original\n\n")
-            f_obj.write(content_str)
-            
+        _save_rag_result(output_path_str, final_text_str, content_str)
         logger.info(f"Saved: {output_path_str}")
     except Exception as error_obj:
         logger.error(f"Error processing {filename_str}: {error_obj}")
 
-def main() -> None:
-    """
-    Ponto de entrada do script. Gerencia os argumentos de linha de comando,
-    lista os arquivos e coordena o processamento de cada um.
-    """
+def _parse_arguments() -> argparse.Namespace:
+    """Configura e analisa argumentos de linha de comando."""
     parser_obj: argparse.ArgumentParser = argparse.ArgumentParser()
     parser_obj.add_argument("--dir", default=".", help="Input directory")
     parser_obj.add_argument("--output", help="Output directory")
     parser_obj.add_argument("--rules", default="rules.txt", help="Rules file")
     parser_obj.add_argument("--files", nargs='+', help="Specific files to process")
-    args_obj: argparse.Namespace = parser_obj.parse_args()
+    return parser_obj.parse_args()
+
+def main() -> None:
+    """Ponto de entrada coordenador do script heurístico local."""
+    args_obj: argparse.Namespace = _parse_arguments()
 
     input_dir_path: str = args_obj.dir
     output_dir_path: str = args_obj.output if args_obj.output else input_dir_path
@@ -400,13 +381,11 @@ def main() -> None:
     processor_obj: HeuristicProcessor = HeuristicProcessor()
     
     files_to_process_list: List[str] = get_files_to_process(input_dir_path, args_obj.files)
-
     if not files_to_process_list:
         logger.info("No files found to process.")
         return
 
     logger.info(f"Processing {len(files_to_process_list)} files heuristically...")
-    
     for filename_str in files_to_process_list:
         process_single_file(filename_str, input_dir_path, output_dir_path, rules_list, processor_obj)
 

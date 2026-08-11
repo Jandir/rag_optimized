@@ -1,0 +1,15 @@
+1
+00:00:00,000 --> 00:00:05,000
+Olá a todos, bem-vindos a mais um encontro do MasterMind.
+
+2
+00:00:05,000 --> 00:00:10,000
+Hoje vamos falar sobre a Ecclesia e os Sete Montanhas de influência.
+
+3
+00:00:10,000 --> 00:00:15,000
+É muito importante entender como a Eclesia se posiciona na sociedade.
+
+4
+00:00:15,000 --> 00:00:20,000
+O Jandi vai explicar melhor os detalhes técnicos.
