@@ -24,3 +24,6 @@
 ## 2026-08-11 - [String Concatenation Optimization in Loops]
 **Learning:** String concatenation with `+=` in dynamic loops for markdown generation can lead to O(n²) memory reallocation overhead, and for performance consistency we should use a list of parts and `''.join()` instead.
 **Action:** Use list append and `''.join()` instead of `+=` chaining for generating large text documents in loops.
+## 2024-05-18 - String Building and NLP Initialization Bottlenecks
+**Learning:** Re-instantiating heavy NLP models (like `yake.KeywordExtractor`) inside frequently called loops (`_format_section`) causes massive performance overhead. Furthermore, chaining `+=` operators to build large markdown strings in loops leads to O(n²) memory reallocation overhead.
+**Action:** Always instantiate NLP models at the class level (`__init__`) and reuse them. Use lists to gather string parts and assemble them with `''.join()` instead of chaining `+=`. Disable unused pipeline components in spaCy models to save memory and instantiation time.
