@@ -213,9 +213,11 @@ class HeuristicProcessor:
     def __init__(self):
         # Carregamos o modelo de Português do spaCy (NER e Sentenças)
         logger.info("Loading spaCy model...")
-        self.nlp_obj = spacy.load("pt_core_news_sm")
+        self.nlp_obj = spacy.load("pt_core_news_sm", disable=["tagger", "morphologizer", "lemmatizer", "attribute_ruler", "parser"])
+        self.nlp_obj.add_pipe("sentencizer")
         # Configuramos o extrator de palavras-chave YAKE
         self.kw_extractor_obj = yake.KeywordExtractor(lan="pt", n=3, dedupLim=0.9, top=10)
+        self.sec_kw_extractor_obj = yake.KeywordExtractor(lan="pt", n=2, top=3)
         # O TextTiling ajuda a dividir o texto em seções baseadas em mudança de tópico
         self.tt_tokenizer_obj = TextTilingTokenizer()
 
@@ -268,22 +270,21 @@ class HeuristicProcessor:
 
     def _format_section(self, i_int: int, section_str: str) -> str:
         """Formata uma única seção com tags e título heurístico."""
-        extractor_obj: yake.KeywordExtractor = yake.KeywordExtractor(lan="pt", n=2, top=3)
-        sec_keywords_list: List[str] = [kw[0] for kw in extractor_obj.extract_keywords(section_str)]
+        sec_keywords_list: List[str] = [kw[0] for kw in self.sec_kw_extractor_obj.extract_keywords(section_str)]
         sec_title_str: str = f"Seção {i_int}: " + (sec_keywords_list[0].capitalize() if sec_keywords_list else "Desenvolvimento")
         
-        output_str: str = f"### {sec_title_str}\n"
-        output_str += f"**Tags:** {' '.join(['#'+kw.replace(' ', '') for kw in sec_keywords_list])}\n\n"
-        output_str += f"{section_str.strip()}\n\n"
-        return output_str
+        parts_list: List[str] = [f"### {sec_title_str}\n"]
+        parts_list.append(f"**Tags:** {' '.join(['#'+kw.replace(' ', '') for kw in sec_keywords_list])}\n\n")
+        parts_list.append(f"{section_str.strip()}\n\n")
+        return "".join(parts_list)
 
     def _generate_markdown_output(self, meta_dict: Dict[str, str], entities_list: List[str], keywords_list: List[str], sections_list: List[str]) -> str:
         """Monta o documento Markdown final unificando cabeçalho e seções."""
-        output_str: str = self._generate_markdown_header(meta_dict, entities_list, keywords_list)
-        output_str += "## Seções Temáticas\n"
+        parts_list: List[str] = [self._generate_markdown_header(meta_dict, entities_list, keywords_list)]
+        parts_list.append("## Seções Temáticas\n")
         for i_int, section_str in enumerate(sections_list, 1):
-            output_str += self._format_section(i_int, section_str)
-        return output_str
+            parts_list.append(self._format_section(i_int, section_str))
+        return "".join(parts_list)
 
     def process(self, text_str: str, meta_dict: Dict[str, str]) -> str:
         """
