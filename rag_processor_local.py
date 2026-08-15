@@ -34,6 +34,8 @@ MONTHS_PT_DICT: Dict[str, str] = {
     "9": "Setembro", "10": "Outubro", "11": "Novembro", "12": "Dezembro"
 }
 
+HTML_TAG_PATTERN_OBJ: re.Pattern = re.compile(r'<[^>]*>')
+
 EXCLUDED_FILES_SET: set[str] = {
     "historico.txt", "cookies.txt", "requirements.txt", "rules.txt",
     "LICENSE", "README.md", "rag_processor.py", "rag_processor_local.py"
@@ -53,16 +55,19 @@ load_dotenv(os.path.join(SCRIPT_DIR_PATH, '.env'))
 
 def _parse_srt_blocks(content_str: str) -> List[str]:
     """Extracts text blocks from SRT content, removing tags."""
-    pattern_obj: re.Pattern = re.compile(
-        r'(\d+)\n(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})\n((?:(?!\n\n).)*?)(?=\n\n|$)',
-        re.DOTALL
-    )
     blocks_list: List[str] = []
-    for match_obj in pattern_obj.finditer(content_str):
-        text_block_str: str = match_obj.group(4).strip()
-        text_block_str = re.sub(r'<[^>]*>', '', text_block_str)
-        if text_block_str:
-            blocks_list.append(text_block_str)
+    for block_str in content_str.split('\n\n'):
+        if not block_str.strip():
+            continue
+        arrow_idx_int: int = block_str.find(' --> ')
+        if arrow_idx_int != -1:
+            newline_idx_int: int = block_str.find('\n', arrow_idx_int)
+            if newline_idx_int != -1:
+                text_block_str: str = block_str[newline_idx_int+1:].strip()
+                if text_block_str:
+                    text_block_str = HTML_TAG_PATTERN_OBJ.sub('', text_block_str)
+                    if text_block_str:
+                        blocks_list.append(text_block_str)
     return blocks_list
 
 def _handle_simple_repetition(prev_text_str: str, curr_text_str: str) -> Optional[str]:

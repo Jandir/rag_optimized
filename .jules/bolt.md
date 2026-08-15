@@ -24,3 +24,7 @@
 ## 2026-08-11 - [String Concatenation Optimization in Loops]
 **Learning:** String concatenation with `+=` in dynamic loops for markdown generation can lead to O(n²) memory reallocation overhead, and for performance consistency we should use a list of parts and `''.join()` instead.
 **Action:** Use list append and `''.join()` instead of `+=` chaining for generating large text documents in loops.
+
+## 2026-08-15 - Optimize SRT parsing
+**Learning:** Native string operations (.split, .find) are significantly faster (~2x) than multi-line regexes when parsing structured blocks.
+**Action:** Prefer string operations over complex regex for predictable block formats like SRT.
