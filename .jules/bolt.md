@@ -24,3 +24,6 @@
 ## 2026-08-11 - [String Concatenation Optimization in Loops]
 **Learning:** String concatenation with `+=` in dynamic loops for markdown generation can lead to O(n²) memory reallocation overhead, and for performance consistency we should use a list of parts and `''.join()` instead.
 **Action:** Use list append and `''.join()` instead of `+=` chaining for generating large text documents in loops.
+## 2026-08-16 - Optimizing NLP model instantiations
+**Learning:** Instantiating yake.KeywordExtractor and standard spacy.load models inside loops or frequently called methods adds massive overhead.
+**Action:** Initialize these models once in the class __init__, and disable unused spaCy pipeline components (like tagger, parser) to improve processing performance.
