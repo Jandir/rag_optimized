@@ -51,18 +51,21 @@ load_dotenv(os.path.join(SCRIPT_DIR_PATH, '.env'))
 
 # --- Helper Functions ---
 
+HTML_TAG_PATTERN_OBJ: re.Pattern = re.compile(r'<[^>]*>')
+
 def _parse_srt_blocks(content_str: str) -> List[str]:
-    """Extracts text blocks from SRT content, removing tags."""
-    pattern_obj: re.Pattern = re.compile(
-        r'(\d+)\n(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})\n((?:(?!\n\n).)*?)(?=\n\n|$)',
-        re.DOTALL
-    )
+    """Extracts text blocks from SRT content, removing tags in an optimized way."""
     blocks_list: List[str] = []
-    for match_obj in pattern_obj.finditer(content_str):
-        text_block_str: str = match_obj.group(4).strip()
-        text_block_str = re.sub(r'<[^>]*>', '', text_block_str)
-        if text_block_str:
-            blocks_list.append(text_block_str)
+    chunks_list: List[str] = content_str.split('\n\n')
+    for chunk_str in chunks_list:
+        arrow_idx_int: int = chunk_str.find(' --> ')
+        if arrow_idx_int != -1:
+            newline_idx_int: int = chunk_str.find('\n', arrow_idx_int)
+            if newline_idx_int != -1:
+                text_block_str: str = chunk_str[newline_idx_int+1:].strip()
+                if text_block_str:
+                    text_block_str = HTML_TAG_PATTERN_OBJ.sub('', text_block_str)
+                    blocks_list.append(text_block_str)
     return blocks_list
 
 def _handle_simple_repetition(prev_text_str: str, curr_text_str: str) -> Optional[str]:

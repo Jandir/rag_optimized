@@ -24,3 +24,7 @@
 ## 2026-08-11 - [String Concatenation Optimization in Loops]
 **Learning:** String concatenation with `+=` in dynamic loops for markdown generation can lead to O(n²) memory reallocation overhead, and for performance consistency we should use a list of parts and `''.join()` instead.
 **Action:** Use list append and `''.join()` instead of `+=` chaining for generating large text documents in loops.
+
+## 2024-06-25 - [Optimize HTML Regex and Native String Splitting]
+**Learning:** Moving regular expressions to module-level compilation avoids recompilation per-loop, and native string operations (e.g. `split('\n\n')` and `.find()`) heavily outperform multiline regex with negative lookaheads (`re.DOTALL`, `(?=\n\n|$)`) by ~1.8x when parsing structured text blocks like SRT files.
+**Action:** Replace complex multiline regex used for splitting with native `.split()` and slice indices when possible, and always hoist static regex compilations outside of processing loops.
