@@ -51,18 +51,21 @@ load_dotenv(os.path.join(SCRIPT_DIR_PATH, '.env'))
 
 # --- Helper Functions ---
 
+HTML_TAG_PATTERN: re.Pattern = re.compile(r'<[^>]*>')
+
 def _parse_srt_blocks(content_str: str) -> List[str]:
     """Extracts text blocks from SRT content, removing tags."""
-    pattern_obj: re.Pattern = re.compile(
-        r'(\d+)\n(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})\n((?:(?!\n\n).)*?)(?=\n\n|$)',
-        re.DOTALL
-    )
     blocks_list: List[str] = []
-    for match_obj in pattern_obj.finditer(content_str):
-        text_block_str: str = match_obj.group(4).strip()
-        text_block_str = re.sub(r'<[^>]*>', '', text_block_str)
-        if text_block_str:
-            blocks_list.append(text_block_str)
+    raw_blocks_list: List[str] = content_str.split('\n\n')
+    for block_str in raw_blocks_list:
+        arrow_idx_int: int = block_str.find('-->')
+        if arrow_idx_int != -1:
+            text_start_idx_int: int = block_str.find('\n', arrow_idx_int)
+            if text_start_idx_int != -1:
+                text_block_str: str = block_str[text_start_idx_int:].strip()
+                text_block_str = HTML_TAG_PATTERN.sub('', text_block_str)
+                if text_block_str:
+                    blocks_list.append(text_block_str)
     return blocks_list
 
 def _handle_simple_repetition(prev_text_str: str, curr_text_str: str) -> Optional[str]:
@@ -216,6 +219,7 @@ class HeuristicProcessor:
         self.nlp_obj = spacy.load("pt_core_news_sm")
         # Configuramos o extrator de palavras-chave YAKE
         self.kw_extractor_obj = yake.KeywordExtractor(lan="pt", n=3, dedupLim=0.9, top=10)
+        self.sec_kw_extractor_obj = yake.KeywordExtractor(lan="pt", n=2, top=3)
         # O TextTiling ajuda a dividir o texto em seções baseadas em mudança de tópico
         self.tt_tokenizer_obj = TextTilingTokenizer()
 
@@ -268,8 +272,7 @@ class HeuristicProcessor:
 
     def _format_section(self, i_int: int, section_str: str) -> str:
         """Formata uma única seção com tags e título heurístico."""
-        extractor_obj: yake.KeywordExtractor = yake.KeywordExtractor(lan="pt", n=2, top=3)
-        sec_keywords_list: List[str] = [kw[0] for kw in extractor_obj.extract_keywords(section_str)]
+        sec_keywords_list: List[str] = [kw[0] for kw in self.sec_kw_extractor_obj.extract_keywords(section_str)]
         sec_title_str: str = f"Seção {i_int}: " + (sec_keywords_list[0].capitalize() if sec_keywords_list else "Desenvolvimento")
         
         output_str: str = f"### {sec_title_str}\n"
