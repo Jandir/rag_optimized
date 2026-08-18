@@ -24,3 +24,6 @@
 ## 2026-08-11 - [String Concatenation Optimization in Loops]
 **Learning:** String concatenation with `+=` in dynamic loops for markdown generation can lead to O(n²) memory reallocation overhead, and for performance consistency we should use a list of parts and `''.join()` instead.
 **Action:** Use list append and `''.join()` instead of `+=` chaining for generating large text documents in loops.
+## 2026-08-18 - [Pre-compile dynamic user regexes update]
+**Learning:** We found another case where yake.KeywordExtractor was being initialized per block in rag_processor_local.py, which was fixed by bringing it to __init__.
+**Action:** Always double-check loops and internal helper methods for heavy object instantiations.
