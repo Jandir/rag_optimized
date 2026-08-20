@@ -216,8 +216,9 @@ class HeuristicProcessor:
         # Carregamos o modelo de Português do spaCy (NER e Sentenças)
         logger.info("Loading spaCy model...")
         self.nlp_obj = spacy.load("pt_core_news_sm")
-        # Configuramos o extrator de palavras-chave YAKE
+        # Configuramos os extratores de palavras-chave YAKE
         self.kw_extractor_obj = yake.KeywordExtractor(lan="pt", n=3, dedupLim=0.9, top=10)
+        self.sec_kw_extractor_obj = yake.KeywordExtractor(lan="pt", n=2, top=3)
         # O TextTiling ajuda a dividir o texto em seções baseadas em mudança de tópico
         self.tt_tokenizer_obj = TextTilingTokenizer()
 
@@ -270,8 +271,7 @@ class HeuristicProcessor:
 
     def _format_section(self, i_int: int, section_str: str) -> str:
         """Formata uma única seção com tags e título heurístico."""
-        extractor_obj: yake.KeywordExtractor = yake.KeywordExtractor(lan="pt", n=2, top=3)
-        sec_keywords_list: List[str] = [kw[0] for kw in extractor_obj.extract_keywords(section_str)]
+        sec_keywords_list: List[str] = [kw[0] for kw in self.sec_kw_extractor_obj.extract_keywords(section_str)]
         sec_title_str: str = f"Seção {i_int}: " + (sec_keywords_list[0].capitalize() if sec_keywords_list else "Desenvolvimento")
         
         output_str: str = f"### {sec_title_str}\n"

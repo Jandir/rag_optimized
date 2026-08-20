@@ -27,3 +27,7 @@
 ## 2026-08-19 - [Avoid Multiline Regex for Structured Blocks in SRT Parsing]
 **Learning:** Multiline regexes with lookaheads are computationally expensive and inefficient when parsing predictable `.srt` structures. Pre-compiling tag removal regexes and utilizing string `.split('\n\n')` alongside native string slicing (`str.find`) reduces parsing overhead significantly (up to ~2-3x speedup).
 **Action:** Replaced the multiline regex in `_parse_srt_blocks` in both `rag_processor.py` and `rag_processor_local.py` with `split('\n\n')` and native string operations (`str.find`) and pre-compiled the `r'<[^>]*>'` HTML tag removal regex at the module level.
+
+## 2026-08-20 - [YAKE Initialization Optimization]
+**Learning:** Instantiating NLP models or extractors like `yake.KeywordExtractor` inside loops or frequently called formatting functions causes significant overhead due to object setup and internal processing initialization.
+**Action:** Always instantiate keyword extractors and heavy NLP models at the class level or in `__init__` to reuse instances across multiple text blocks, preserving processing time.
