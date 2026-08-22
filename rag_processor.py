@@ -226,13 +226,18 @@ def _extract_video_id(clean_name_str: str) -> str:
 
 def extract_metadata_from_filename(filename_str: str) -> Dict[str, str]:
     """Extrai título, data e ID do vídeo de forma modular."""
-    clean_name_str: str = (
-        filename_str.replace(" Transcrição.txt", "")
-        .replace(".txt", "")
-        .replace(" Transcrição.srt", "")
-        .replace(".srt", "")
-        .strip()
-    )
+    # Otimização Bolt: Substituição de .replace() encadeado por fatiamento (slicing)
+    # baseado em .endswith(), evitando a alocação múltipla de strings intermediárias.
+    clean_name_str: str = filename_str
+    if clean_name_str.endswith(" Transcrição.txt"):
+        clean_name_str = clean_name_str[:-16]
+    elif clean_name_str.endswith(" Transcrição.srt"):
+        clean_name_str = clean_name_str[:-16]
+    elif clean_name_str.endswith(".txt"):
+        clean_name_str = clean_name_str[:-4]
+    elif clean_name_str.endswith(".srt"):
+        clean_name_str = clean_name_str[:-4]
+    clean_name_str = clean_name_str.strip()
 
     event_date_str: str = _extract_event_date(clean_name_str)
     video_id_str: str = _extract_video_id(clean_name_str)
