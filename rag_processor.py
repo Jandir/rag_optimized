@@ -162,11 +162,24 @@ def _parse_rule_line(line_str: str) -> Optional[Dict[str, Any]]:
 
     if '->' in line_str:
         parts_list: List[str] = line_str.split('->', 1)
-        return {
-            "original": parts_list[0].strip(),
-            "replacement": parts_list[1].strip(),
+        original_str = parts_list[0].strip()
+        replacement_str = parts_list[1].strip()
+
+        rule_dict = {
+            "original": original_str,
+            "replacement": replacement_str,
             "is_regex": is_regex_bool
         }
+
+        if is_regex_bool:
+            try:
+                # ⚡ Bolt Optimization: Pre-compile regexes during load time to avoid
+                # repetitive re.compile() overhead inside processing loops.
+                rule_dict["compiled_pattern"] = re.compile(original_str)
+            except Exception as error_obj:
+                logger.error(f"Erro ao compilar regex '{original_str}': {error_obj}")
+                return None
+        return rule_dict
     return None
 
 def load_rules(rules_path_str: str = "rules.txt") -> List[Dict[str, Any]]:
@@ -194,7 +207,8 @@ def enforce_terminology(text_str: str, rules_list: List[Dict[str, Any]]) -> str:
     for rule_dict in rules_list:
         if rule_dict["is_regex"]:
             try:
-                text_str = re.sub(rule_dict["original"], rule_dict["replacement"], text_str)
+                # ⚡ Bolt Optimization: Use the pre-compiled regex object to speed up replacements
+                text_str = rule_dict["compiled_pattern"].sub(rule_dict["replacement"], text_str)
             except Exception as error_obj:
                 logger.error(f"Erro em Regex '{rule_dict['original']}': {error_obj}")
         else:
