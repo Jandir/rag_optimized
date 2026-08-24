@@ -1,3 +1,4 @@
+import re
 import pytest
 import os
 from rag_processor import (
@@ -38,7 +39,7 @@ def test_extract_metadata_with_id():
 def test_enforce_terminology():
     rules = [
         {"original": "Sete Montes", "replacement": "7 Montes", "is_regex": False},
-        {"original": r"vixe\s+maria", "replacement": "caramba", "is_regex": True}
+        {"original": r"vixe\s+maria", "replacement": "caramba", "is_regex": True, "pattern": re.compile(r"vixe\s+maria")}
     ]
     text = "Falamos sobre Sete Montes e vixe  maria que aula."
     result = enforce_terminology(text, rules)
