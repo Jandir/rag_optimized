@@ -162,11 +162,26 @@ def _parse_rule_line(line_str: str) -> Optional[Dict[str, Any]]:
 
     if '->' in line_str:
         parts_list: List[str] = line_str.split('->', 1)
-        return {
-            "original": parts_list[0].strip(),
-            "replacement": parts_list[1].strip(),
+        original_str = parts_list[0].strip()
+        replacement_str = parts_list[1].strip()
+
+        rule_dict: Dict[str, Any] = {
+            "original": original_str,
+            "replacement": replacement_str,
             "is_regex": is_regex_bool
         }
+
+        if is_regex_bool:
+            # ⚡ Bolt Optimization: Pre-compile user-defined dynamic regex rules during initialization.
+            # This avoids the overhead of compiling or relying on Python's re internal cache
+            # on every loop iteration inside `enforce_terminology`.
+            try:
+                rule_dict["compiled_pattern"] = re.compile(original_str)
+            except Exception as error_obj:
+                logger.error(f"Erro ao compilar regex '{original_str}': {error_obj}")
+                return None
+
+        return rule_dict
     return None
 
 def load_rules(rules_path_str: str = "rules.txt") -> List[Dict[str, Any]]:
@@ -193,10 +208,11 @@ def enforce_terminology(text_str: str, rules_list: List[Dict[str, Any]]) -> str:
     """Aplica substituições de termos baseadas nas regras carregadas."""
     for rule_dict in rules_list:
         if rule_dict["is_regex"]:
-            try:
-                text_str = re.sub(rule_dict["original"], rule_dict["replacement"], text_str)
-            except Exception as error_obj:
-                logger.error(f"Erro em Regex '{rule_dict['original']}': {error_obj}")
+            if "compiled_pattern" in rule_dict:
+                try:
+                    text_str = rule_dict["compiled_pattern"].sub(rule_dict["replacement"], text_str)
+                except Exception as error_obj:
+                    logger.error(f"Erro na substituição Regex '{rule_dict['original']}': {error_obj}")
         else:
             text_str = text_str.replace(rule_dict["original"], rule_dict["replacement"])
     return text_str

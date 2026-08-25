@@ -37,9 +37,10 @@ How are you
         self.assertEqual(meta["video_id"], "abc123_-XYZ")
 
     def test_enforce_terminology(self):
+        import re
         rules = [
             {"original": "Sete Montes", "replacement": "7 Montes", "is_regex": False},
-            {"original": r"vixe\s+maria", "replacement": "caramba", "is_regex": True}
+            {"original": r"vixe\s+maria", "replacement": "caramba", "is_regex": True, "compiled_pattern": re.compile(r"vixe\s+maria")}
         ]
         text = "Falamos sobre Sete Montes e vixe  maria que aula."
         result = enforce_terminology(text, rules)
