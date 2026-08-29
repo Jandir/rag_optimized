@@ -293,11 +293,13 @@ class HeuristicProcessor:
 
     def _generate_markdown_output(self, meta_dict: Dict[str, str], entities_list: List[str], keywords_list: List[str], sections_list: List[str]) -> str:
         """Monta o documento Markdown final unificando cabeçalho e seções."""
-        output_str: str = self._generate_markdown_header(meta_dict, entities_list, keywords_list)
-        output_str += "## Seções Temáticas\n"
+        parts_list: List[str] = [
+            self._generate_markdown_header(meta_dict, entities_list, keywords_list),
+            "## Seções Temáticas\n"
+        ]
         for i_int, section_str in enumerate(sections_list, 1):
-            output_str += self._format_section(i_int, section_str)
-        return output_str
+            parts_list.append(self._format_section(i_int, section_str))
+        return "".join(parts_list)
 
     def process(self, text_str: str, meta_dict: Dict[str, str]) -> str:
         """
