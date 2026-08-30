@@ -52,6 +52,8 @@ load_dotenv(os.path.join(SCRIPT_DIR_PATH, '.env'))
 # --- Helper Functions ---
 
 HTML_TAG_PATTERN: re.Pattern = re.compile(r'<[^>]*>')
+EVENT_DATE_PATTERN: re.Pattern = re.compile(r'(Jan|Fev|Mar|Abr|Mai|Jun|Jul|Ago|Set|Out|Nov|Dez)\s+(\d{4})', re.IGNORECASE)
+VIDEO_ID_PATTERN: re.Pattern = re.compile(r'(?:\[|[-_])([a-zA-Z0-9_-]{11})(?:\])?$')
 
 def _parse_srt_blocks(content_str: str) -> List[str]:
     """Extracts text blocks from SRT content, removing tags."""
@@ -176,11 +178,7 @@ def enforce_terminology(text_str: str, rules_list: List[Dict[str, Any]]) -> str:
 
 def _extract_event_date(clean_name_str: str) -> str:
     """Extrai e formata a data do evento."""
-    date_match_obj: Optional[re.Match] = re.search(
-        r'(Jan|Fev|Mar|Abr|Mai|Jun|Jul|Ago|Set|Out|Nov|Dez)\s+(\d{4})',
-        clean_name_str,
-        re.I
-    )
+    date_match_obj: Optional[re.Match] = EVENT_DATE_PATTERN.search(clean_name_str)
     if not date_match_obj:
         return "N/A"
 
@@ -191,10 +189,7 @@ def _extract_event_date(clean_name_str: str) -> str:
 
 def _extract_video_id(clean_name_str: str) -> str:
     """Extrai o ID do vídeo do YouTube."""
-    video_id_match_obj: Optional[re.Match] = re.search(
-        r'(?:\[|[-_])([a-zA-Z0-9_-]{11})(?:\])?$',
-        clean_name_str
-    )
+    video_id_match_obj: Optional[re.Match] = VIDEO_ID_PATTERN.search(clean_name_str)
     return video_id_match_obj.group(1) if video_id_match_obj else "N/A"
 
 def extract_metadata_from_filename(filename_str: str) -> Dict[str, str]:
@@ -271,33 +266,39 @@ class HeuristicProcessor:
         now_obj: datetime = datetime.now()
         current_date_str: str = f"{now_obj.day} de {MONTHS_PT_DICT[str(now_obj.month)]} de {now_obj.year}"
 
-        header_str: str = f"# Fonte RAG: {meta_dict['title']}\n\n"
-        header_str += "## Metadados do Documento\n"
-        header_str += f"- **ID:** {meta_dict['video_id']}\n"
-        header_str += f"- **Data da Transcrição:** {current_date_str}\n"
-        header_str += f"- **Data do Evento:** {meta_dict['event_date']}\n"
-        header_str += f"- **Assunto Principal:** {', '.join(entities_list) if entities_list else 'Conteúdo Geral'}\n"
-        header_str += "- **Público-Alvo:** Líderes, Ekklezia, Mesa do Conselho.\n"
-        header_str += f"- **Terminologia Chave:** {', '.join(keywords_list)}\n\n"
-        return header_str
+        parts_list: List[str] = [
+            f"# Fonte RAG: {meta_dict['title']}\n\n",
+            "## Metadados do Documento\n",
+            f"- **ID:** {meta_dict['video_id']}\n",
+            f"- **Data da Transcrição:** {current_date_str}\n",
+            f"- **Data do Evento:** {meta_dict['event_date']}\n",
+            f"- **Assunto Principal:** {', '.join(entities_list) if entities_list else 'Conteúdo Geral'}\n",
+            "- **Público-Alvo:** Líderes, Ekklezia, Mesa do Conselho.\n",
+            f"- **Terminologia Chave:** {', '.join(keywords_list)}\n\n"
+        ]
+        return "".join(parts_list)
 
     def _format_section(self, i_int: int, section_str: str) -> str:
         """Formata uma única seção com tags e título heurístico."""
         sec_keywords_list: List[str] = [kw[0] for kw in self.sec_kw_extractor_obj.extract_keywords(section_str)]
         sec_title_str: str = f"Seção {i_int}: " + (sec_keywords_list[0].capitalize() if sec_keywords_list else "Desenvolvimento")
         
-        output_str: str = f"### {sec_title_str}\n"
-        output_str += f"**Tags:** {' '.join(['#'+kw.replace(' ', '') for kw in sec_keywords_list])}\n\n"
-        output_str += f"{section_str.strip()}\n\n"
-        return output_str
+        parts_list: List[str] = [
+            f"### {sec_title_str}\n",
+            f"**Tags:** {' '.join(['#'+kw.replace(' ', '') for kw in sec_keywords_list])}\n\n",
+            f"{section_str.strip()}\n\n"
+        ]
+        return "".join(parts_list)
 
     def _generate_markdown_output(self, meta_dict: Dict[str, str], entities_list: List[str], keywords_list: List[str], sections_list: List[str]) -> str:
         """Monta o documento Markdown final unificando cabeçalho e seções."""
-        output_str: str = self._generate_markdown_header(meta_dict, entities_list, keywords_list)
-        output_str += "## Seções Temáticas\n"
+        parts_list: List[str] = [
+            self._generate_markdown_header(meta_dict, entities_list, keywords_list),
+            "## Seções Temáticas\n"
+        ]
         for i_int, section_str in enumerate(sections_list, 1):
-            output_str += self._format_section(i_int, section_str)
-        return output_str
+            parts_list.append(self._format_section(i_int, section_str))
+        return "".join(parts_list)
 
     def process(self, text_str: str, meta_dict: Dict[str, str]) -> str:
         """

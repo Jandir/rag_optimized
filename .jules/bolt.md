@@ -27,3 +27,7 @@
 ## 2026-08-19 - [Avoid Multiline Regex for Structured Blocks in SRT Parsing]
 **Learning:** Multiline regexes with lookaheads are computationally expensive and inefficient when parsing predictable `.srt` structures. Pre-compiling tag removal regexes and utilizing string `.split('\n\n')` alongside native string slicing (`str.find`) reduces parsing overhead significantly (up to ~2-3x speedup).
 **Action:** Replaced the multiline regex in `_parse_srt_blocks` in both `rag_processor.py` and `rag_processor_local.py` with `split('\n\n')` and native string operations (`str.find`) and pre-compiled the `r'<[^>]*>'` HTML tag removal regex at the module level.
+
+## 2026-10-27 - [Avoid Repetitive Regex Compilation in Helpers]
+**Learning:** Functions called iteratively (like metadata extractors looping over large batches of filenames) that directly use `re.search` compile the regular expression every time. For instance, extracting date and video IDs using inline `re.search` creates a significant overhead when processing thousands of names.
+**Action:** Always pre-compile these extraction patterns at the module level using `re.compile()` and use the `.search()` method of the pre-compiled regex object inside helper functions.
