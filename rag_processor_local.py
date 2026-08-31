@@ -271,33 +271,36 @@ class HeuristicProcessor:
         now_obj: datetime = datetime.now()
         current_date_str: str = f"{now_obj.day} de {MONTHS_PT_DICT[str(now_obj.month)]} de {now_obj.year}"
 
-        header_str: str = f"# Fonte RAG: {meta_dict['title']}\n\n"
-        header_str += "## Metadados do Documento\n"
-        header_str += f"- **ID:** {meta_dict['video_id']}\n"
-        header_str += f"- **Data da Transcrição:** {current_date_str}\n"
-        header_str += f"- **Data do Evento:** {meta_dict['event_date']}\n"
-        header_str += f"- **Assunto Principal:** {', '.join(entities_list) if entities_list else 'Conteúdo Geral'}\n"
-        header_str += "- **Público-Alvo:** Líderes, Ekklezia, Mesa do Conselho.\n"
-        header_str += f"- **Terminologia Chave:** {', '.join(keywords_list)}\n\n"
-        return header_str
+        parts_list: List[str] = []
+        parts_list.append(f"# Fonte RAG: {meta_dict['title']}\n\n")
+        parts_list.append("## Metadados do Documento\n")
+        parts_list.append(f"- **ID:** {meta_dict['video_id']}\n")
+        parts_list.append(f"- **Data da Transcrição:** {current_date_str}\n")
+        parts_list.append(f"- **Data do Evento:** {meta_dict['event_date']}\n")
+        parts_list.append(f"- **Assunto Principal:** {', '.join(entities_list) if entities_list else 'Conteúdo Geral'}\n")
+        parts_list.append("- **Público-Alvo:** Líderes, Ekklezia, Mesa do Conselho.\n")
+        parts_list.append(f"- **Terminologia Chave:** {', '.join(keywords_list)}\n\n")
+        return "".join(parts_list)
 
     def _format_section(self, i_int: int, section_str: str) -> str:
         """Formata uma única seção com tags e título heurístico."""
         sec_keywords_list: List[str] = [kw[0] for kw in self.sec_kw_extractor_obj.extract_keywords(section_str)]
         sec_title_str: str = f"Seção {i_int}: " + (sec_keywords_list[0].capitalize() if sec_keywords_list else "Desenvolvimento")
         
-        output_str: str = f"### {sec_title_str}\n"
-        output_str += f"**Tags:** {' '.join(['#'+kw.replace(' ', '') for kw in sec_keywords_list])}\n\n"
-        output_str += f"{section_str.strip()}\n\n"
-        return output_str
+        parts_list: List[str] = []
+        parts_list.append(f"### {sec_title_str}\n")
+        parts_list.append(f"**Tags:** {' '.join(['#'+kw.replace(' ', '') for kw in sec_keywords_list])}\n\n")
+        parts_list.append(f"{section_str.strip()}\n\n")
+        return "".join(parts_list)
 
     def _generate_markdown_output(self, meta_dict: Dict[str, str], entities_list: List[str], keywords_list: List[str], sections_list: List[str]) -> str:
         """Monta o documento Markdown final unificando cabeçalho e seções."""
-        output_str: str = self._generate_markdown_header(meta_dict, entities_list, keywords_list)
-        output_str += "## Seções Temáticas\n"
+        parts_list: List[str] = []
+        parts_list.append(self._generate_markdown_header(meta_dict, entities_list, keywords_list))
+        parts_list.append("## Seções Temáticas\n")
         for i_int, section_str in enumerate(sections_list, 1):
-            output_str += self._format_section(i_int, section_str)
-        return output_str
+            parts_list.append(self._format_section(i_int, section_str))
+        return "".join(parts_list)
 
     def process(self, text_str: str, meta_dict: Dict[str, str]) -> str:
         """
