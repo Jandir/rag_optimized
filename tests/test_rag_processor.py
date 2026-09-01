@@ -60,5 +60,7 @@ def test_handle_simple_repetition():
 def test_handle_partial_overlap():
     prev = "Linha 1\nLinha 2"
     curr = "Linha 2\nLinha 3"
-    result = _handle_partial_overlap(prev, curr)
+    prev_lines = [line.strip() for line in prev.split('\n') if line.strip()]
+    curr_lines = [line.strip() for line in curr.split('\n') if line.strip()]
+    result = _handle_partial_overlap(prev_lines, curr_lines)
     assert result == ["Linha 3"]
