@@ -58,7 +58,7 @@ def test_handle_simple_repetition():
     assert result == "está próximo"
 
 def test_handle_partial_overlap():
-    prev = "Linha 1\nLinha 2"
-    curr = "Linha 2\nLinha 3"
-    result = _handle_partial_overlap(prev, curr)
+    prev_lines = ["Linha 1", "Linha 2"]
+    curr_lines = ["Linha 2", "Linha 3"]
+    result = _handle_partial_overlap(prev_lines, curr_lines)
     assert result == ["Linha 3"]

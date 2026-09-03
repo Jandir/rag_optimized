@@ -27,3 +27,6 @@
 ## 2026-08-19 - [Avoid Multiline Regex for Structured Blocks in SRT Parsing]
 **Learning:** Multiline regexes with lookaheads are computationally expensive and inefficient when parsing predictable `.srt` structures. Pre-compiling tag removal regexes and utilizing string `.split('\n\n')` alongside native string slicing (`str.find`) reduces parsing overhead significantly (up to ~2-3x speedup).
 **Action:** Replaced the multiline regex in `_parse_srt_blocks` in both `rag_processor.py` and `rag_processor_local.py` with `split('\n\n')` and native string operations (`str.find`) and pre-compiled the `r'<[^>]*>'` HTML tag removal regex at the module level.
+## 2025-01-20 - Caching Parsed Strings in Loop Deduplication
+**Learning:** Parsing strings inside sequential string comparison (like finding overlaps in SRT 'rollup' blocks) creates redundant overhead because `prev_text_str` was split multiple times across loop iterations.
+**Action:** Extract expensive operations like `.split()` and list comprehensions out of sequential processing functions (`_handle_partial_overlap`), and cache them (`prev_lines_cache_list`) in the loop to be reused across iterations.
