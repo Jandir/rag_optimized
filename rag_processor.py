@@ -91,10 +91,8 @@ def _handle_simple_repetition(prev_text_str: str, curr_text_str: str) -> Optiona
         return curr_text_str[len(prev_text_str):].strip()
     return None
 
-def _handle_partial_overlap(prev_text_str: str, curr_text_str: str) -> List[str]:
+def _handle_partial_overlap(prev_lines_list: List[str], curr_lines_list: List[str]) -> List[str]:
     """Identifica sobreposições parciais linha a linha e retorna as linhas únicas."""
-    prev_lines_list: List[str] = [line.strip() for line in prev_text_str.split('\n') if line.strip()]
-    curr_lines_list: List[str] = [line.strip() for line in curr_text_str.split('\n') if line.strip()]
     start_idx_int: int = 0
 
     if prev_lines_list and curr_lines_list:
@@ -111,6 +109,10 @@ def _deduplicate_srt_lines(blocks_list: List[str]) -> List[str]:
         return []
 
     cleaned_lines_list: List[str] = [blocks_list[0]]
+
+    # ⚡ Bolt Optimization: Cache parsed lines to avoid redundant string splitting (O(n) speedup in large SRTs)
+    prev_lines_cache_list: List[str] = [line.strip() for line in blocks_list[0].split('\n') if line.strip()]
+
     for i_int in range(1, len(blocks_list)):
         prev_text_str: str = blocks_list[i_int - 1]
         curr_text_str: str = blocks_list[i_int]
@@ -120,11 +122,15 @@ def _deduplicate_srt_lines(blocks_list: List[str]) -> List[str]:
         if new_part_str is not None:
             if new_part_str:
                 cleaned_lines_list.append(new_part_str)
+            prev_lines_cache_list = [line.strip() for line in curr_text_str.split('\n') if line.strip()]
             continue
 
         # Caso 2: Sobreposições parciais
-        unique_lines_list: List[str] = _handle_partial_overlap(prev_text_str, curr_text_str)
+        curr_lines_list: List[str] = [line.strip() for line in curr_text_str.split('\n') if line.strip()]
+        unique_lines_list: List[str] = _handle_partial_overlap(prev_lines_cache_list, curr_lines_list)
         cleaned_lines_list.extend(unique_lines_list)
+
+        prev_lines_cache_list = curr_lines_list
 
     return cleaned_lines_list
 
