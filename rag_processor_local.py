@@ -174,13 +174,13 @@ def enforce_terminology(text_str: str, rules_list: List[Dict[str, Any]]) -> str:
             text_str = text_str.replace(rule_dict["original"], rule_dict["replacement"])
     return text_str
 
+EVENT_DATE_PATTERN: re.Pattern = re.compile(r'(Jan|Fev|Mar|Abr|Mai|Jun|Jul|Ago|Set|Out|Nov|Dez)\s+(\d{4})', re.IGNORECASE)
+VIDEO_ID_PATTERN: re.Pattern = re.compile(r'(?:\[|[-_])([a-zA-Z0-9_-]{11})(?:\])?$')
+FILLER_WORDS_PATTERN: re.Pattern = re.compile(r'\bne\b|\bentão\b|\btipo\b|\bsabe\b|\bpra\b|\btá\b|\bgente\b', re.IGNORECASE)
+
 def _extract_event_date(clean_name_str: str) -> str:
     """Extrai e formata a data do evento."""
-    date_match_obj: Optional[re.Match] = re.search(
-        r'(Jan|Fev|Mar|Abr|Mai|Jun|Jul|Ago|Set|Out|Nov|Dez)\s+(\d{4})',
-        clean_name_str,
-        re.I
-    )
+    date_match_obj: Optional[re.Match] = EVENT_DATE_PATTERN.search(clean_name_str)
     if not date_match_obj:
         return "N/A"
 
@@ -191,10 +191,7 @@ def _extract_event_date(clean_name_str: str) -> str:
 
 def _extract_video_id(clean_name_str: str) -> str:
     """Extrai o ID do vídeo do YouTube."""
-    video_id_match_obj: Optional[re.Match] = re.search(
-        r'(?:\[|[-_])([a-zA-Z0-9_-]{11})(?:\])?$',
-        clean_name_str
-    )
+    video_id_match_obj: Optional[re.Match] = VIDEO_ID_PATTERN.search(clean_name_str)
     return video_id_match_obj.group(1) if video_id_match_obj else "N/A"
 
 def extract_metadata_from_filename(filename_str: str) -> Dict[str, str]:
@@ -236,11 +233,7 @@ class HeuristicProcessor:
 
     def clean_filler_words(self, text_str: str) -> str:
         """Removes common Portuguese filler words via regex."""
-        fillers_list: List[str] = [
-            r'\bne\b', r'\bentão\b', r'\btipo\b', r'\bsabe\b', r'\bpra\b', r'\btá\b', r'\bgente\b'
-        ]
-        pattern_obj: re.Pattern = re.compile('|'.join(fillers_list), re.IGNORECASE)
-        return pattern_obj.sub('', text_str).replace('  ', ' ').strip()
+        return FILLER_WORDS_PATTERN.sub('', text_str).replace('  ', ' ').strip()
 
     def _extract_keywords(self, text_str: str) -> List[str]:
         """Extracts top keywords using YAKE."""
