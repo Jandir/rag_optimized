@@ -6,7 +6,7 @@ from rag_processor import (
     enforce_terminology,
     _parse_srt_blocks,
     _handle_simple_repetition,
-    _handle_partial_overlap
+    _deduplicate_srt_lines
 )
 
 def test_clean_srt_content_simple():
@@ -57,8 +57,7 @@ def test_handle_simple_repetition():
     result = _handle_simple_repetition(prev, curr)
     assert result == "está próximo"
 
-def test_handle_partial_overlap():
-    prev = "Linha 1\nLinha 2"
-    curr = "Linha 2\nLinha 3"
-    result = _handle_partial_overlap(prev, curr)
-    assert result == ["Linha 3"]
+def test_deduplicate_partial_overlap():
+    blocks = ["Linha 1\nLinha 2", "Linha 2\nLinha 3"]
+    result = _deduplicate_srt_lines(blocks)
+    assert result == ["Linha 1\nLinha 2", "Linha 3"]
