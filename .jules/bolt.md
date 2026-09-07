@@ -30,3 +30,7 @@
 ## 2026-09-05 - [Optimize SRT Deduplication by Caching Intermediate Splits]
 **Learning:** Found a hidden O(N) multiplier during rollup SRT deduplication where multi-line splits were repeated in every iteration.
 **Action:** State across iteration can be cached to avoid duplicated string parsing.
+
+## 2026-09-07 - [Precompile Static Regex Patterns at Module Level]
+**Learning:** Compiling static regular expressions like filler words or common ID extractors inside functions or using `re.search` creates noticeable overhead (up to ~30% slower) due to function calls and redundant processing, even when python caches regexes.
+**Action:** Hoist all static regular expressions to module-level constants using `re.compile` to avoid repetitive compilation and lookup overhead inside loops or frequently called functions.
