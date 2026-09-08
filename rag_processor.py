@@ -82,7 +82,8 @@ def _parse_srt_blocks(content_str: str) -> List[str]:
             if eol_idx_int != -1:
                 text_block_str: str = block_str[eol_idx_int + 1:].strip()
                 # Remove tags HTML simples como <i> ou <b> que podem vir no .srt
-                text_block_str = HTML_TAG_PATTERN.sub('', text_block_str)
+                if '<' in text_block_str:
+                    text_block_str = HTML_TAG_PATTERN.sub('', text_block_str)
                 if text_block_str:
                     blocks_list.append(text_block_str)
     return blocks_list
