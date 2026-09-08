@@ -34,3 +34,6 @@
 ## 2026-09-07 - [Precompile Static Regex Patterns at Module Level]
 **Learning:** Compiling static regular expressions like filler words or common ID extractors inside functions or using `re.search` creates noticeable overhead (up to ~30% slower) due to function calls and redundant processing, even when python caches regexes.
 **Action:** Hoist all static regular expressions to module-level constants using `re.compile` to avoid repetitive compilation and lookup overhead inside loops or frequently called functions.
+## 2026-09-08 - [Optimize regex substitution and early exit deduplication]
+**Learning:** Checking for specific substring presence (like `<`) before applying an expensive regex replacement on thousands of lines significantly improves performance. Also, using a list comprehension + dictionary deduplication + slicing when we only need the first 5 unique entities wastes cycles processing the entire list.
+**Action:** Use fast string checks before triggering expensive regex operations where possible. For deduplicating a limited number of items from a large sequence, use a dictionary with early exit loop instead of full traversal.

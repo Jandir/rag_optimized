@@ -65,7 +65,8 @@ def _parse_srt_blocks(content_str: str) -> List[str]:
             eol_idx_int: int = block_str.find('\n', arrow_idx_int)
             if eol_idx_int != -1:
                 text_block_str: str = block_str[eol_idx_int + 1:].strip()
-                text_block_str = HTML_TAG_PATTERN.sub('', text_block_str)
+                if '<' in text_block_str:
+                    text_block_str = HTML_TAG_PATTERN.sub('', text_block_str)
                 if text_block_str:
                     blocks_list.append(text_block_str)
     return blocks_list
@@ -241,10 +242,14 @@ class HeuristicProcessor:
 
     def _extract_entities(self, doc_obj: Any) -> List[str]:
         """Extracts top entities (ORG, PER, LOC)."""
-        entities_list: List[str] = [
-            ent.text for ent in doc_obj.ents if ent.label_ in ["ORG", "PER", "LOC"]
-        ]
-        return list(dict.fromkeys(entities_list))[:5]
+        unique_ents_dict: Dict[str, None] = {}
+        allowed_labels_set = {"ORG", "PER", "LOC"}
+        for ent in doc_obj.ents:
+            if ent.label_ in allowed_labels_set:
+                unique_ents_dict[ent.text] = None
+                if len(unique_ents_dict) == 5:
+                    break
+        return list(unique_ents_dict.keys())
 
     def _segment_content(self, doc_obj: Any) -> List[str]:
         """Segments text using TextTiling with a sentence-to-paragraph fallback."""
