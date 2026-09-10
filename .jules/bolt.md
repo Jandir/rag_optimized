@@ -37,3 +37,6 @@
 ## 2026-09-08 - [Optimize regex substitution and early exit deduplication]
 **Learning:** Checking for specific substring presence (like `<`) before applying an expensive regex replacement on thousands of lines significantly improves performance. Also, using a list comprehension + dictionary deduplication + slicing when we only need the first 5 unique entities wastes cycles processing the entire list.
 **Action:** Use fast string checks before triggering expensive regex operations where possible. For deduplicating a limited number of items from a large sequence, use a dictionary with early exit loop instead of full traversal.
+## 2026-09-10 - [Avoid instantiating static sets inside loops/functions]
+**Learning:** Defining static data structures like `allowed_labels_set = {"ORG", "PER", "LOC"}` inside functions like `_extract_entities` forces Python to allocate memory and build the set (`BUILD_SET`) on every function call. When processing many documents with multiple entities, this creates redundant overhead.
+**Action:** Always hoist static, non-mutating sets, dictionaries, or lists to the module level as constants to reuse the same memory reference and prevent unnecessary instantiation overhead.
