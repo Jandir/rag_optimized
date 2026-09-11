@@ -55,6 +55,9 @@ HTML_TAG_PATTERN: re.Pattern = re.compile(r'<[^>]*>')
 EVENT_DATE_PATTERN: re.Pattern = re.compile(r'(Jan|Fev|Mar|Abr|Mai|Jun|Jul|Ago|Set|Out|Nov|Dez)\s+(\d{4})', re.I)
 VIDEO_ID_PATTERN: re.Pattern = re.compile(r'(?:\[|[-_])([a-zA-Z0-9_-]{11})(?:\])?$')
 FILLERS_PATTERN: re.Pattern = re.compile(r'\bne\b|\bentão\b|\btipo\b|\bsabe\b|\bpra\b|\btá\b|\bgente\b', re.IGNORECASE)
+# [BOLT OPTIMIZATION]: Hoisted static set to module level to avoid re-instantiation overhead.
+# Impact: Minor performance improvement by avoiding local object creation inside loops.
+ALLOWED_ENT_LABELS_SET: set[str] = {"ORG", "PER", "LOC"}
 
 def _parse_srt_blocks(content_str: str) -> List[str]:
     """Extracts text blocks from SRT content, removing tags."""
@@ -243,9 +246,8 @@ class HeuristicProcessor:
     def _extract_entities(self, doc_obj: Any) -> List[str]:
         """Extracts top entities (ORG, PER, LOC)."""
         unique_ents_dict: Dict[str, None] = {}
-        allowed_labels_set = {"ORG", "PER", "LOC"}
         for ent in doc_obj.ents:
-            if ent.label_ in allowed_labels_set:
+            if ent.label_ in ALLOWED_ENT_LABELS_SET:
                 unique_ents_dict[ent.text] = None
                 if len(unique_ents_dict) == 5:
                     break
