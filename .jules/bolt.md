@@ -37,3 +37,6 @@
 ## 2026-09-08 - [Optimize regex substitution and early exit deduplication]
 **Learning:** Checking for specific substring presence (like `<`) before applying an expensive regex replacement on thousands of lines significantly improves performance. Also, using a list comprehension + dictionary deduplication + slicing when we only need the first 5 unique entities wastes cycles processing the entire list.
 **Action:** Use fast string checks before triggering expensive regex operations where possible. For deduplicating a limited number of items from a large sequence, use a dictionary with early exit loop instead of full traversal.
+## 2026-09-11 - [Hoist Static Sets to Module Level]
+**Learning:** Defining a static set inside a frequently called function (like `_extract_entities`) incurs unnecessary instantiation overhead on every call. Our benchmark showed a ~6-7% performance penalty in an isolated test.
+**Action:** Move static data structures like `allowed_labels_set` to the module level as constants (e.g., `ALLOWED_ENT_LABELS_SET`) to reuse them across function calls and improve efficiency.
