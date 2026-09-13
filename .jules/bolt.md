@@ -40,3 +40,6 @@
 ## 2026-09-11 - [Hoist Static Sets to Module Level]
 **Learning:** Defining a static set inside a frequently called function (like `_extract_entities`) incurs unnecessary instantiation overhead on every call. Our benchmark showed a ~6-7% performance penalty in an isolated test.
 **Action:** Move static data structures like `allowed_labels_set` to the module level as constants (e.g., `ALLOWED_ENT_LABELS_SET`) to reuse them across function calls and improve efficiency.
+## 2026-09-13 - [Inlining SRT Parsing Helper]
+**Learning:** Inlining small helper functions inside tight text-processing loops (like parsing thousands of SRT blocks) avoids Python function call overhead, yielding a measurable speedup (~5%).
+**Action:** Profile text-processing loops and inline trivial helpers where the function call overhead outweighs the benefits of modularity.

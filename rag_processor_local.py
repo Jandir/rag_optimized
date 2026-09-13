@@ -74,12 +74,6 @@ def _parse_srt_blocks(content_str: str) -> List[str]:
                     blocks_list.append(text_block_str)
     return blocks_list
 
-def _handle_simple_repetition(prev_text_str: str, curr_text_str: str) -> Optional[str]:
-    """Retorna a nova parte do texto se for uma repetição simples, caso contrário None."""
-    if curr_text_str.startswith(prev_text_str):
-        return curr_text_str[len(prev_text_str):].strip()
-    return None
-
 def _deduplicate_srt_lines(blocks_list: List[str]) -> List[str]:
     """Lógica modular para remover repetições em legendas do tipo 'rollup'."""
     if not blocks_list:
@@ -92,8 +86,8 @@ def _deduplicate_srt_lines(blocks_list: List[str]) -> List[str]:
         prev_text_str: str = blocks_list[i_int - 1]
         curr_text_str: str = blocks_list[i_int]
 
-        new_part_str: Optional[str] = _handle_simple_repetition(prev_text_str, curr_text_str)
-        if new_part_str is not None:
+        if curr_text_str.startswith(prev_text_str):
+            new_part_str: str = curr_text_str[len(prev_text_str):].strip()
             if new_part_str:
                 cleaned_lines_list.append(new_part_str)
             prev_lines_list = None
