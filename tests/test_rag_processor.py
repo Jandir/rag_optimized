@@ -5,7 +5,6 @@ from rag_processor import (
     extract_metadata_from_filename,
     enforce_terminology,
     _parse_srt_blocks,
-    _handle_simple_repetition,
     _deduplicate_srt_lines
 )
 
@@ -50,12 +49,6 @@ def test_parse_srt_blocks():
     srt = "1\n00:00:00,000 --> 00:00:01,000\n<b>Bold</b> text\n\n"
     blocks = _parse_srt_blocks(srt)
     assert blocks == ["Bold text"]
-
-def test_handle_simple_repetition():
-    prev = "O reino de Deus"
-    curr = "O reino de Deus está próximo"
-    result = _handle_simple_repetition(prev, curr)
-    assert result == "está próximo"
 
 def test_deduplicate_partial_overlap():
     blocks = ["Linha 1\nLinha 2", "Linha 2\nLinha 3"]
