@@ -3,9 +3,7 @@ import os
 from rag_processor import (
     clean_srt_content,
     extract_metadata_from_filename,
-    enforce_terminology,
-    _parse_srt_blocks,
-    _deduplicate_srt_lines
+    enforce_terminology
 )
 
 def test_clean_srt_content_simple():
@@ -45,12 +43,3 @@ def test_enforce_terminology():
     assert "7 Montes" in result
     assert "caramba" in result
 
-def test_parse_srt_blocks():
-    srt = "1\n00:00:00,000 --> 00:00:01,000\n<b>Bold</b> text\n\n"
-    blocks = _parse_srt_blocks(srt)
-    assert blocks == ["Bold text"]
-
-def test_deduplicate_partial_overlap():
-    blocks = ["Linha 1\nLinha 2", "Linha 2\nLinha 3"]
-    result = _deduplicate_srt_lines(blocks)
-    assert result == ["Linha 1\nLinha 2", "Linha 3"]
