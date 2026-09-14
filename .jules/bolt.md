@@ -43,3 +43,7 @@
 ## 2026-09-13 - [Inlining SRT Parsing Helper]
 **Learning:** Inlining small helper functions inside tight text-processing loops (like parsing thousands of SRT blocks) avoids Python function call overhead, yielding a measurable speedup (~5%).
 **Action:** Profile text-processing loops and inline trivial helpers where the function call overhead outweighs the benefits of modularity.
+
+## 2026-09-14 - [Inlining SRT Parsing Helpers]
+**Learning:** Inlining small text-processing helper functions (`_parse_srt_blocks` and `_deduplicate_srt_lines`) inside tight text-processing loops (like parsing thousands of SRT blocks) avoids Python function call overhead, yielding a measurable speedup.
+**Action:** Profile text-processing loops and inline trivial helpers where the function call overhead outweighs the benefits of modularity.

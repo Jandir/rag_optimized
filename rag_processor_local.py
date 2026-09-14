@@ -59,62 +59,51 @@ FILLERS_PATTERN: re.Pattern = re.compile(r'\bne\b|\bentão\b|\btipo\b|\bsabe\b|\
 # Impact: Minor performance improvement by avoiding local object creation inside loops.
 ALLOWED_ENT_LABELS_SET: set[str] = {"ORG", "PER", "LOC"}
 
-def _parse_srt_blocks(content_str: str) -> List[str]:
-    """Extracts text blocks from SRT content, removing tags."""
-    blocks_list: List[str] = []
+def clean_srt_content(content_str: str) -> str:
+    """Limpa arquivos .srt removendo tempos e deduplicando conteúdo rollup."""
+    content_str = content_str.replace('\r\n', '\n')
+    cleaned_lines_list: List[str] = []
+    prev_text_str: str = ""
+    prev_lines_list: Optional[List[str]] = None
+
     for block_str in content_str.split('\n\n'):
         arrow_idx_int: int = block_str.find('-->')
         if arrow_idx_int != -1:
             eol_idx_int: int = block_str.find('\n', arrow_idx_int)
             if eol_idx_int != -1:
-                text_block_str: str = block_str[eol_idx_int + 1:].strip()
-                if '<' in text_block_str:
-                    text_block_str = HTML_TAG_PATTERN.sub('', text_block_str)
-                if text_block_str:
-                    blocks_list.append(text_block_str)
-    return blocks_list
+                curr_text_str: str = block_str[eol_idx_int + 1:].strip()
+                if '<' in curr_text_str:
+                    curr_text_str = HTML_TAG_PATTERN.sub('', curr_text_str)
+                if curr_text_str:
+                    if not cleaned_lines_list:
+                        cleaned_lines_list.append(curr_text_str)
+                        prev_text_str = curr_text_str
+                        continue
 
-def _deduplicate_srt_lines(blocks_list: List[str]) -> List[str]:
-    """Lógica modular para remover repetições em legendas do tipo 'rollup'."""
-    if not blocks_list:
-        return []
+                    if curr_text_str.startswith(prev_text_str):
+                        new_part_str: str = curr_text_str[len(prev_text_str):].strip()
+                        if new_part_str:
+                            cleaned_lines_list.append(new_part_str)
+                        prev_text_str = curr_text_str
+                        prev_lines_list = None
+                        continue
 
-    cleaned_lines_list: List[str] = [blocks_list[0]]
-    prev_lines_list: Optional[List[str]] = None
+                    if prev_lines_list is None:
+                        prev_lines_list = [line.strip() for line in prev_text_str.split('\n') if line.strip()]
 
-    for i_int in range(1, len(blocks_list)):
-        prev_text_str: str = blocks_list[i_int - 1]
-        curr_text_str: str = blocks_list[i_int]
+                    curr_lines_list: List[str] = [line.strip() for line in curr_text_str.split('\n') if line.strip()]
+                    start_idx_int: int = 0
 
-        if curr_text_str.startswith(prev_text_str):
-            new_part_str: str = curr_text_str[len(prev_text_str):].strip()
-            if new_part_str:
-                cleaned_lines_list.append(new_part_str)
-            prev_lines_list = None
-            continue
+                    if prev_lines_list and curr_lines_list:
+                        if curr_lines_list[0] == prev_lines_list[-1]:
+                            start_idx_int = 1
+                        elif len(prev_lines_list) < len(curr_lines_list) and curr_lines_list[:len(prev_lines_list)] == prev_lines_list:
+                            start_idx_int = len(prev_lines_list)
 
-        if prev_lines_list is None:
-            prev_lines_list = [line.strip() for line in prev_text_str.split('\n') if line.strip()]
+                    cleaned_lines_list.extend(curr_lines_list[start_idx_int:])
+                    prev_lines_list = curr_lines_list
+                    prev_text_str = curr_text_str
 
-        curr_lines_list: List[str] = [line.strip() for line in curr_text_str.split('\n') if line.strip()]
-        start_idx_int: int = 0
-
-        if prev_lines_list and curr_lines_list:
-            if curr_lines_list[0] == prev_lines_list[-1]:
-                start_idx_int = 1
-            elif len(prev_lines_list) < len(curr_lines_list) and curr_lines_list[:len(prev_lines_list)] == prev_lines_list:
-                start_idx_int = len(prev_lines_list)
-
-        cleaned_lines_list.extend(curr_lines_list[start_idx_int:])
-        prev_lines_list = curr_lines_list
-
-    return cleaned_lines_list
-
-def clean_srt_content(content_str: str) -> str:
-    """Limpa arquivos .srt removendo tempos e deduplicando conteúdo rollup."""
-    content_str = content_str.replace('\r\n', '\n')
-    blocks_list: List[str] = _parse_srt_blocks(content_str)
-    cleaned_lines_list: List[str] = _deduplicate_srt_lines(blocks_list)
     return ' '.join(cleaned_lines_list)
 
 def _parse_rule_line(line_str: str) -> Optional[Dict[str, Any]]:

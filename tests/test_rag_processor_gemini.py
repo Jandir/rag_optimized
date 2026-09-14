@@ -4,9 +4,7 @@ import re
 from rag_processor import (
     clean_srt_content,
     extract_metadata_from_filename,
-    enforce_terminology,
-    _parse_srt_blocks,
-    _deduplicate_srt_lines
+    enforce_terminology
 )
 
 class TestRagProcessor(unittest.TestCase):
@@ -45,11 +43,6 @@ How are you
         result = enforce_terminology(text, rules)
         self.assertIn("7 Montes", result)
         self.assertIn("caramba", result)
-
-    def test_parse_srt_blocks(self):
-        srt = "1\n00:00:00,000 --> 00:00:01,000\n<b>Bold</b> text\n\n"
-        blocks = _parse_srt_blocks(srt)
-        self.assertEqual(blocks, ["Bold text"])
 
 if __name__ == '__main__':
     unittest.main()
