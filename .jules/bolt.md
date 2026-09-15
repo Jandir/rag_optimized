@@ -43,3 +43,7 @@
 ## 2026-09-13 - [Inlining SRT Parsing Helper]
 **Learning:** Inlining small helper functions inside tight text-processing loops (like parsing thousands of SRT blocks) avoids Python function call overhead, yielding a measurable speedup (~5%).
 **Action:** Profile text-processing loops and inline trivial helpers where the function call overhead outweighs the benefits of modularity.
+
+## 2026-09-15 - [Direct loop iteration and splitlines in Deduplication]
+**Learning:** During string deduplication in tight loops, using `range(len())` and multiple lookups for the previous and current element is inefficient. We can iterate directly over `blocks_list[1:]` and keep track of the previous text. Moreover, `str.splitlines()` is implemented in C and runs noticeably faster than `str.split('\n')` for breaking text blocks into lines.
+**Action:** Use direct list iteration with a tracking variable over indexed range loops to avoid list lookup overhead. Also, prefer `str.splitlines()` over `str.split('\n')` when splitting text by line breaks for better performance.
