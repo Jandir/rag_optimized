@@ -94,16 +94,18 @@ def _deduplicate_srt_lines(blocks_list: List[str]) -> List[str]:
             continue
 
         if prev_lines_list is None:
-            prev_lines_list = [line.strip() for line in prev_text_str.split('\n') if line.strip()]
+            prev_lines_list = [line for line in prev_text_str.split('\n') if line]
 
-        curr_lines_list: List[str] = [line.strip() for line in curr_text_str.split('\n') if line.strip()]
+        curr_lines_list: List[str] = [line for line in curr_text_str.split('\n') if line]
         start_idx_int: int = 0
 
         if prev_lines_list and curr_lines_list:
             if curr_lines_list[0] == prev_lines_list[-1]:
                 start_idx_int = 1
-            elif len(prev_lines_list) < len(curr_lines_list) and curr_lines_list[:len(prev_lines_list)] == prev_lines_list:
-                start_idx_int = len(prev_lines_list)
+            else:
+                prev_len = len(prev_lines_list)
+                if prev_len < len(curr_lines_list) and curr_lines_list[:prev_len] == prev_lines_list:
+                    start_idx_int = prev_len
 
         cleaned_lines_list.extend(curr_lines_list[start_idx_int:])
         prev_lines_list = curr_lines_list

@@ -43,3 +43,6 @@
 ## 2026-09-13 - [Inlining SRT Parsing Helper]
 **Learning:** Inlining small helper functions inside tight text-processing loops (like parsing thousands of SRT blocks) avoids Python function call overhead, yielding a measurable speedup (~5%).
 **Action:** Profile text-processing loops and inline trivial helpers where the function call overhead outweighs the benefits of modularity.
+## 2026-09-17 - [Optimize string splits and overlap checks in deduplication]
+**Learning:** The `_deduplicate_srt_lines` method was spending unnecessary CPU cycles stripping whitespace from lines that were already stripped earlier in `_parse_srt_blocks` and constantly recalculating `len(prev_lines_list)` multiple times per overlap check.
+**Action:** When working with sequentially pre-cleaned text chunks, omit redundant `.strip()` checks during splits, and cache the length of comparison lists locally to avoid repeated function evaluations in tight comparison conditions.
