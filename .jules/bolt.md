@@ -43,3 +43,8 @@
 ## 2026-09-13 - [Inlining SRT Parsing Helper]
 **Learning:** Inlining small helper functions inside tight text-processing loops (like parsing thousands of SRT blocks) avoids Python function call overhead, yielding a measurable speedup (~5%).
 **Action:** Profile text-processing loops and inline trivial helpers where the function call overhead outweighs the benefits of modularity.
+
+
+## 2026-09-20 - [Redundant Operations and Iteration Overhead]
+**Learning:** We previously attempted to optimize deduplication by replacing `range(len())` index iteration with `zip()`, and using `splitlines()` instead of `.split('\n')`. However, we discovered two critical learnings: 1) `splitlines()` does not remove empty elements or strip whitespaces, which caused functional bugs in our empty-line filtering logic. 2) Replacing a simple index loop with `zip(seq, seq[1:])` on large sequences creates a shallow copy slice (`seq[1:]`) that actually increases memory allocation overhead and is not inherently faster.
+**Action:** When working with pre-cleaned text blocks in tight loops, avoid redundant operations like `.strip()` if empty-line removal (`if line`) is sufficient. Additionally, manually cache properties like `len()` into local variables to avoid repetitive attribute lookup overhead within complex conditional branches, rather than prematurely switching iteration strategies that alter memory footprint.
