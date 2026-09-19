@@ -43,3 +43,7 @@
 ## 2026-09-13 - [Inlining SRT Parsing Helper]
 **Learning:** Inlining small helper functions inside tight text-processing loops (like parsing thousands of SRT blocks) avoids Python function call overhead, yielding a measurable speedup (~5%).
 **Action:** Profile text-processing loops and inline trivial helpers where the function call overhead outweighs the benefits of modularity.
+
+## 2026-10-25 - [Be careful removing .strip() in split line comprehensions]
+**Learning:** When replacing `[line.strip() for line in text.split('\n') if line.strip()]` with `[line for line in text.split('\n') if line]` to save string allocation cycles, be aware that lines containing only whitespace (e.g. `"  "`) evaluate to True without `.strip()`, breaking logic if you expect those to be filtered out. Also, the benchmark showed `str.split('\n')` is faster than `str.splitlines()` in this codebase.
+**Action:** Be careful about functional regressions when optimizing string processing comprehensions. Rely on `str.split('\n')` for line splitting over `str.splitlines()` in Python.
