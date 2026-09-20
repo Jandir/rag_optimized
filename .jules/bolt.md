@@ -43,3 +43,7 @@
 ## 2026-09-13 - [Inlining SRT Parsing Helper]
 **Learning:** Inlining small helper functions inside tight text-processing loops (like parsing thousands of SRT blocks) avoids Python function call overhead, yielding a measurable speedup (~5%).
 **Action:** Profile text-processing loops and inline trivial helpers where the function call overhead outweighs the benefits of modularity.
+
+## 2026-09-20 - [Optimize loop array length tracking and indexing]
+**Learning:** Direct iteration in Python lists and saving list length directly skips multiple list indexing lookups and truthiness checking overhead over strings arrays.
+**Action:** Use list length properties to pre-calculate lengths, tracking previous loops' cached texts instead of list indexing in tight text deduplication loops.
