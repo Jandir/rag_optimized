@@ -43,3 +43,7 @@
 ## 2026-09-13 - [Inlining SRT Parsing Helper]
 **Learning:** Inlining small helper functions inside tight text-processing loops (like parsing thousands of SRT blocks) avoids Python function call overhead, yielding a measurable speedup (~5%).
 **Action:** Profile text-processing loops and inline trivial helpers where the function call overhead outweighs the benefits of modularity.
+
+## 2026-09-21 - [Optimize sequence iteration via caching and enumeration]
+**Learning:** Iterating over a sequence using `range(len())` and re-computing lengths or indexing repetitively introduces measurable overhead (O(n) operations multiplying constants in large loops).
+**Action:** Use direct sequence iteration `for curr in seq[1:]` caching the previous state, and locally cache sequence lengths using a variable to avoid repeated attribute lookups in bottleneck loops.
