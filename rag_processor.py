@@ -93,19 +93,19 @@ def _deduplicate_srt_lines(blocks_list: List[str]) -> List[str]:
     if not blocks_list:
         return []
 
-    cleaned_lines_list: List[str] = [blocks_list[0]]
+    blocks_iter = iter(blocks_list)
+    prev_text_str: str = next(blocks_iter)
+    cleaned_lines_list: List[str] = [prev_text_str]
     prev_lines_list: Optional[List[str]] = None
 
-    for i_int in range(1, len(blocks_list)):
-        prev_text_str: str = blocks_list[i_int - 1]
-        curr_text_str: str = blocks_list[i_int]
-
+    for curr_text_str in blocks_iter:
         # Caso 1: Repetição simples
         if curr_text_str.startswith(prev_text_str):
             new_part_str: str = curr_text_str[len(prev_text_str):].strip()
             if new_part_str:
                 cleaned_lines_list.append(new_part_str)
             prev_lines_list = None
+            prev_text_str = curr_text_str
             continue
 
         # Caso 2: Sobreposições parciais
@@ -123,6 +123,7 @@ def _deduplicate_srt_lines(blocks_list: List[str]) -> List[str]:
 
         cleaned_lines_list.extend(curr_lines_list[start_idx_int:])
         prev_lines_list = curr_lines_list
+        prev_text_str = curr_text_str
 
     return cleaned_lines_list
 
