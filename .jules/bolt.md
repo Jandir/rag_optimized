@@ -43,3 +43,7 @@
 ## 2026-09-13 - [Inlining SRT Parsing Helper]
 **Learning:** Inlining small helper functions inside tight text-processing loops (like parsing thousands of SRT blocks) avoids Python function call overhead, yielding a measurable speedup (~5%).
 **Action:** Profile text-processing loops and inline trivial helpers where the function call overhead outweighs the benefits of modularity.
+
+## 2026-09-28 - [Iterator over Index Lookups]
+**Learning:** Using index lookups (`blocks_list[i_int]`) inside tight loops for sequence traversal incurs unnecessary lookup overhead and memory operations in Python.
+**Action:** Use an iterator (`iter(blocks_list)`) to traverse sequences directly in performance-critical sections to bypass this overhead.
