@@ -47,3 +47,6 @@
 ## 2026-10-27 - [Iterators vs Range-Len in Sequence Traversal]
 **Learning:** Using `range(len(blocks_list))` with index lookups (`blocks_list[i_int]`) in performance-critical deduplication loops creates hidden O(N) allocation and lookup overhead.
 **Action:** Switched to using `iter()` for traversing sequences in `_deduplicate_srt_lines`, leading to a ~10% speedup for large SRT lists. Avoid unnecessary index lookups in tight loops.
+## 2026-11-20 - [Pre-emptive String Inclusion Checks]
+**Learning:** Adding a pre-emptive `if substring in text:` check before calling `text.replace(substring, replacement)` slightly reduces execution time when applying a large list of terminology rules where most terms don't exist in the text. However, it's worth noting that if the substring is found, it's searched twice. Still, for sparse replacements, this yields a net performance win.
+**Action:** When enforcing large sets of terminology rules, precede string replacements with an `if original in text:` check to avoid unnecessary operations.
