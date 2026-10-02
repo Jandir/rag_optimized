@@ -47,3 +47,11 @@
 ## 2026-10-27 - [Iterators vs Range-Len in Sequence Traversal]
 **Learning:** Using `range(len(blocks_list))` with index lookups (`blocks_list[i_int]`) in performance-critical deduplication loops creates hidden O(N) allocation and lookup overhead.
 **Action:** Switched to using `iter()` for traversing sequences in `_deduplicate_srt_lines`, leading to a ~10% speedup for large SRT lists. Avoid unnecessary index lookups in tight loops.
+
+## 2026-11-04 - [Anti-pattern: Pre-emptive String Checks for str.replace]
+**Learning:** Contrary to intuition, checking `if substring in text:` before calling `text.replace(substring, replacement)` is a performance anti-pattern in Python. CPython's `replace` inherently early-exits and returns the original string reference without memory allocation if the substring is missing. A manual pre-emptive check adds a redundant linear scan when the substring *is* present (checking `in`, then running `replace`).
+**Action:** When applying string replacement loops (like terminology rules), do not wrap standard `str.replace` in a pre-emptive `in` check. The C implementation is already optimal for misses.
+
+## 2026-11-04 - [Optimize List Comprehensions with Walrus Operator]
+**Learning:** List comprehensions that repeatedly apply the same function to check for truthiness (e.g. `[line.strip() for line in text.split('\n') if line.strip()]`) evaluate the function twice per valid item.
+**Action:** Use the walrus operator (`:=`) to assign the result of the function evaluation in the condition part of the list comprehension and return that assigned value (e.g. `[stripped for line in text.split('\n') if (stripped := line.strip())]`). This saves redundant function calls in tight loops.
