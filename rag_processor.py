@@ -210,10 +210,9 @@ def enforce_terminology(text_str: str, rules_list: List[Dict[str, Any]]) -> str:
                 except Exception as error_obj:
                     logger.error(f"Erro em Regex '{rule_dict['original']}': {error_obj}")
         else:
-            # [BOLT OPTIMIZATION]: Pre-emptive substring check before replace
-            # Impact: ~20% faster replacement loop by avoiding string allocation overhead for sparse rules
-            if rule_dict["original"] in text_str:
-                text_str = text_str.replace(rule_dict["original"], rule_dict["replacement"])
+            # [BOLT OPTIMIZATION]: Removed pre-emptive string inclusion check before str.replace
+            # Impact: Eliminates redundant linear scan on hits, relying on CPython's optimal native early-exit for misses
+            text_str = text_str.replace(rule_dict["original"], rule_dict["replacement"])
     return text_str
 
 def _extract_event_date(clean_name_str: str) -> str:
