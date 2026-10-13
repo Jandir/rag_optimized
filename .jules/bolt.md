@@ -55,3 +55,6 @@
 ## 2026-11-04 - [Optimize List Comprehensions with Walrus Operator]
 **Learning:** List comprehensions that repeatedly apply the same function to check for truthiness (e.g. `[line.strip() for line in text.split('\n') if line.strip()]`) evaluate the function twice per valid item.
 **Action:** Use the walrus operator (`:=`) to assign the result of the function evaluation in the condition part of the list comprehension and return that assigned value (e.g. `[stripped for line in text.split('\n') if (stripped := line.strip())]`). This saves redundant function calls in tight loops.
+## 2026-12-14 - [Avoid multiple find calls for isolating structured multiline blocks]
+**Learning:** When trying to extract a block of text coming after a marker in a predictable structure like SRT files (e.g. `index\ntimestamp-->timestamp\ntext`), performing sequential `str.find` for the marker and the subsequent newline introduces unnecessary index computation overhead. In benchmarks, limiting native split calls like `str.split('\n', 2)` is actually ~20% faster than manual sequential index tracking.
+**Action:** When extracting text that forms the tail of a structured string block with newline separation, utilize bounded `str.split(delimiter, maxsplit)` to parse and extract the target string segment directly without intermediate index computations.
