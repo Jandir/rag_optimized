@@ -55,3 +55,7 @@
 ## 2026-11-04 - [Optimize List Comprehensions with Walrus Operator]
 **Learning:** List comprehensions that repeatedly apply the same function to check for truthiness (e.g. `[line.strip() for line in text.split('\n') if line.strip()]`) evaluate the function twice per valid item.
 **Action:** Use the walrus operator (`:=`) to assign the result of the function evaluation in the condition part of the list comprehension and return that assigned value (e.g. `[stripped for line in text.split('\n') if (stripped := line.strip())]`). This saves redundant function calls in tight loops.
+
+## 2024-05-24 - Optimize SRT Block Parsing with str.partition
+**Learning:** Using `str.partition()` is faster and more readable than using sequential `str.find()` with index tracking and manual string slicing when parsing structured blocks separated by predictable delimiters (like SRT timestamps).
+**Action:** When extracting text following a specific marker (like '-->'), prefer `str.partition()` over `str.find()` and slicing.
