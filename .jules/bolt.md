@@ -59,3 +59,6 @@
 ## 2024-05-24 - [Optimize SRT parsing with str.partition]
 **Learning:** Using `str.partition()` is faster and more efficient than sequential `str.find()` index tracking to extract text following a specific marker.
 **Action:** Use `str.partition()` when parsing string blocks based on predictable separators instead of managing indexes manually.
+## 2026-10-19 - [Optimize String Replace in Terminology Enforcement]
+**Learning:** CPython's `replace` inherently early-exits and returns the original string reference without memory allocation if the substring is missing. A manual pre-emptive check (`if substring in text:`) adds a redundant linear scan when the substring is present.
+**Action:** Removed pre-emptive string checks for `str.replace()` in `enforce_terminology` to improve replacement loop performance, as CPython's implementation is already optimal for misses.
