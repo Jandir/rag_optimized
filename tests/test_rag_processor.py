@@ -1,5 +1,6 @@
 import pytest
 import os
+import re
 from rag_processor import (
     clean_srt_content,
     extract_metadata_from_filename,
